@@ -38,7 +38,7 @@ def load_data_ptimes(p = 1, filename = None, n = 1000):
 
 
 # VAR(p) - skew normal noise
-def load_data_ptimes(p = 1, filename = None, n = 1000):
+def load_data_p_sn(p = 1, filename = None, n = 1000):
     k = 2
     A = np.zeros((p, k, k))
     if filename is None:
@@ -53,7 +53,6 @@ def load_data_ptimes(p = 1, filename = None, n = 1000):
     nn = 500
     N = nn + n
 
-    #############
     # Generate Skew normal Noise as independent Components
     skewness1 = 5
     skewness2 = -2
@@ -66,7 +65,6 @@ def load_data_ptimes(p = 1, filename = None, n = 1000):
     cov = np.array([[1, 0.3], [0.3, 1]])
     L = np.linalg.cholesky(cov)  # Cholesky decomposition
     err = err @ L.T
-    #############
 
     XXt = np.zeros((k, N))
     for i in range(p+2, N):
@@ -85,6 +83,10 @@ def load_data_ptimes(p = 1, filename = None, n = 1000):
 
     return Xt
 
+
+
+# VAR(p) - t noise
+def load_data_p_t
 
 
 
