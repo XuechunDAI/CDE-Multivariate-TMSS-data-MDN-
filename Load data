@@ -1,0 +1,94 @@
+# Load data and preprocessing
+
+# VAR(p) - Gaussian noise
+def load_data_ptimes(p = 1, filename = None, n = 1000):
+    k = 2
+    A = np.zeros((p, k, k))
+    if filename is None:
+        for i in range(p):
+            # Randomly generate a matrix whose determinant with an absolute value is 1
+            A[i] = np.random.randn(k, k)
+            A[i] /= np.sqrt(abs(np.linalg.det(A[i])))*p
+    else :
+        A = np.load(filename)
+        print('A: ', A.shape)
+
+    D = -A.transpose((0, 2, 1))
+    nn = 500
+    N = nn + n
+    cov = np.array([[1, 0.3], [0.3, 1]])
+    err = np.random.multivariate_normal(mean=np.zeros(k), cov=cov, size=N)
+    XXt = np.zeros((k, N))
+    for i in range(p+2, N):
+        for j in range(p):
+            XXt[:, i] += A[j] @ XXt[:, i-j-1]
+        XXt[:, i] += err[i, :]
+
+    Xt = XXt[:, nn:N]
+    Xt = Xt.T
+    if abs(Xt[-1, 0])>10 or abs(Xt[-1, 1])>10 or np.isnan(Xt[-1, 0]) or np.isnan(Xt[-1, 1]):
+        Xt = load_data_ptimes(p = p)
+        return Xt
+    for i in range(p):
+        print(f'A{i}:{A[i]}\n')
+    np.save('A.npy', A)
+
+    return Xt
+
+
+
+# VAR(p) - skew normal noise
+def load_data_ptimes(p = 1, filename = None, n = 1000):
+    k = 2
+    A = np.zeros((p, k, k))
+    if filename is None:
+        for i in range(p):
+            A[i] = np.random.randn(k, k)
+            A[i] /= np.sqrt(abs(np.linalg.det(A[i])))*p
+    else :
+        A = np.load(filename)
+        print('A: ', A.shape)
+
+    D = -A.transpose((0, 2, 1))
+    nn = 500
+    N = nn + n
+
+    #############
+    # Generate Skew normal Noise as independent Components
+    skewness1 = 5
+    skewness2 = -2
+
+    err_skew1 = skewnorm.rvs(skewness1, size=N)
+    err_skew2 = skewnorm.rvs(skewness2, size=N)
+    err = np.column_stack((err_skew1, err_skew2))
+
+    # Apply correlation
+    cov = np.array([[1, 0.3], [0.3, 1]])
+    L = np.linalg.cholesky(cov)  # Cholesky decomposition
+    err = err @ L.T
+    #############
+
+    XXt = np.zeros((k, N))
+    for i in range(p+2, N):
+        for j in range(p):
+            XXt[:, i] += A[j] @ XXt[:, i-j-1]
+        XXt[:, i] += err[i, :]
+
+    Xt = XXt[:, nn:N]
+    Xt = Xt.T
+    if abs(Xt[-1, 0])>10 or abs(Xt[-1, 1])>10 or np.isnan(Xt[-1, 0]) or np.isnan(Xt[-1, 1]):
+        Xt = load_data_ptimes(p = p)
+        return Xt
+    for i in range(p):
+        print(f'A{i}:{A[i]}\n')
+    np.save('A.npy', A)
+
+    return Xt
+
+
+
+
+
+
+
+
