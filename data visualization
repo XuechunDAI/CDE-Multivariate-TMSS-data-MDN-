@@ -1,5 +1,7 @@
 # Data Visualization
 
+from matplotlib.patches import Ellipse
+from scipy.stats import chi2
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -35,3 +37,125 @@ def contourf_shower(gmm, x_range = None, y_range = None, samples = None):
     if samples is not None:
         plt.plot(samples[:,0], samples[:,1], '.', c='red', markersize=1)
     plt.show()
+
+
+# Theoretical quantiles
+def confidence_ellipse(mean, cov, q, color):
+    """
+    Calculate the parameters of a quantile ellipse, and return a matplotlib.patches.Ellipse object
+
+    :param mean: mean vector
+    :param cov: covariance matrix
+    :param q: quantiles
+    :return: matplotlib.patches.Ellipse object
+    """
+    # Eigenvalues and eigenvectors of the covariance matrix
+    eigvals, eigvecs = np.linalg.eigh(cov)
+
+    # Corresponding quantiles
+    scale_factor = np.sqrt(chi2.ppf(q, 2))
+
+    # The width and height of the ellipse
+    width, height = 2 * scale_factor * np.sqrt(eigvals)
+
+    # The rotation angle of an ellipse (in radians)
+    angle = np.degrees(np.arctan2(*eigvecs[:, 0][::-1]))
+
+    # Ellipse
+    ellipse = Ellipse(xy=mean, width=width, height=height, angle=angle,
+                      linestyle='--', edgecolor=color, facecolor='none')
+
+    return ellipse
+
+def plot_results(samples, results):
+    """
+    parameters:
+    samples : numpy.ndarray
+        Raw data points
+    results : dict
+        The result of the 'compute_center_outward_ranks' function
+    """
+    plt.figure(figsize=(10, 10))
+
+    # Plot the empirical center outward distribution function 
+    emp = results['emp']
+
+    # Plot points
+    plt.scatter(samples[:, 0], samples[:, 1], c='gray', s=10, alpha=0.5)
+
+    # Plot quantiles
+    q1 = results['q1_points']
+    q2 = results['q2_points']
+    q3 = results['q3_points']
+
+    plt.scatter(q1[:, 0], q1[:, 1], c='red', marker='s', s=50, label="24.4% quantile (Rank = 10)")
+    plt.scatter(q2[:, 0], q2[:, 1], c='blue', marker='^', s=50, label="51.2% quantile (Rank = 21)")
+    plt.scatter(q3[:, 0], q3[:, 1], c='purple', marker='*', s=100, label="80.5% quantile (Rank = 33)")
+
+    # Calculate and plot the quantile ellipse with a covariance of [[1, 0.3], [0.3, 1]]
+    cov = np.array([[1, 0.3], [0.3, 1]])
+    mean = np.zeros(2)
+
+    # Calculate the width and height of the ellipse
+    for q, c in zip([10 / 40, 21 / 40, 33 / 40], ['red', 'blue', 'purple']):
+        ellipse = confidence_ellipse(mean, cov, q, c)
+        plt.gca().add_patch(ellipse)
+
+
+    plt.axis('equal')
+    plt.legend(loc='upper left')
+    plt.title("Center-Outward Ranks and Quantiles")
+    plt.show()
+
+
+# Theoretical quantiles through Monte Carlo
+def plot_sorted_polygon(points, color="red", linewidth=1.5):
+    # Sort points by angle (around the central point)
+    sorted_points = points[
+        np.argsort(
+            np.arctan2(
+                points[:, 0] - np.mean(points[:, 0]),
+                points[:, 1] - np.mean(points[:, 1])
+            )
+        )
+    ]
+
+    polygon = plt.Polygon(
+        sorted_points,
+        fill=None,
+        edgecolor=color,
+        linewidth=linewidth
+    )
+    plt.gca().add_patch(polygon)
+
+
+# Adjusted plot_results function (for which without closed forms)
+def plot_results_appr(samples, results):
+    plt.figure(figsize=(10, 10))
+
+    # Plot the empirical center outward distribution function 
+    emp = results['emp']
+
+    # Plot points
+    plt.scatter(samples[:, 0], samples[:, 1], c='gray', s=10, alpha=0.5)
+
+    # Plot quantiles
+    q1 = results['q1_points']
+    q2 = results['q2_points']
+    q3 = results['q3_points']
+
+    plt.scatter(q1[:, 0], q1[:, 1], c='red', marker='s', s=50, label="24.4% quantile (Rank = 10)")
+    plt.scatter(q2[:, 0], q2[:, 1], c='blue', marker='^', s=50, label="51.2% quantile (Rank = 21)")
+    plt.scatter(q3[:, 0], q3[:, 1], c='purple', marker='*', s=100, label="80.5% quantile (Rank = 33)")
+
+    # Plot three polygons (theoretical quantiles)
+    plot_sorted_polygon(q1_points_true, color="red")
+    plot_sorted_polygon(q2_points_true, color="blue")
+    plot_sorted_polygon(q3_points_true, color="purple")
+
+    plt.axis('equal')
+    plt.legend(loc='upper left')
+    plt.title("Center-Outward Ranks and Quantiles")
+    plt.show()
+
+
