@@ -109,6 +109,130 @@ results = transport(samples, nR=40, nS=25, d=2)
 plot_results_appr(samples, results, q1_points_true, q2_points_true, q3_points_true)
 
 
+# Figure 1c
+
+# Generate data
+Xt = load_data_ptimes(p = 6, n = 10000, filename='A.npy')
+X_train, y_train, X_val, y_val = data_process(Xt, p = 6, r = 0.2)
+print(Xt.shape)
+print(X_train.shape, y_train.shape, X_val.shape, y_val.shape)
+
+test_X = X_val[-5]
+test_y = y_val[-5]
+print(test_X.shape)
+
+# Define model
+torch.set_default_dtype(torch.float64)
+model = RNN(gause_mixture_n=10)
+
+# Train model
+model, tl, vl = train(model, X_train, y_train, X_val, y_val, lr=3e-4, batch_size=128, epochs=10)
+loss_curve_shower(tl, vl)
+
+# get Gaussian mixture model from test_x
+gmm = model.predict_model(test_X)
+
+print(gmm)
+
+# Plot contourf of GMM
+contourf_shower(gmm)
+
+# Generate sample data for true density estimation
+A = np.load('A.npy')
+true_test_X = 0
+for i in range(6):
+    true_test_X += A[i] @ test_X[i]
+
+sample_size = 1000
+test_X_sample = np.zeros((sample_size, 2))
+err_sample = multivariate_t.rvs(loc=np.zeros(2), shape=cov, df=df, size=sample_size)
+
+for i in range(sample_size):
+    test_X_sample[i] = true_test_X + err_sample[i]
+
+Qj3D1 = test_X_sample  # for convenience
+results_true = transport(Qj3D1, nR=40, nS=25, d=2)
+q1_points_true, q2_points_true, q3_points_true = results_true['q1_points'], results_true['q2_points'], results_true['q3_points']
+
+# Generate samples from GMM (2000 samples)
+samples = gmm.sample(2000)
+
+#step 2: transport and show results
+results = transport(samples, nR=40, nS=50, d=2)
+plot_results_appr(samples, results)
+
+
+# Figure 1d
+
+# Generate data
+Xt = load_gaus_mix(p = 6, n = 10000, filename='A.npy')
+X_train, y_train, X_val, y_val = data_process(Xt, p = 6, r = 0.2)
+print(Xt.shape)
+print(X_train.shape, y_train.shape, X_val.shape, y_val.shape)
+
+test_X = X_val[-5]
+test_y = y_val[-5]
+print(test_X.shape)
+print(test_X)
+
+set_seed(42)
+# Define model
+torch.set_default_dtype(torch.float64)
+model = RNN(gause_mixture_n=10)
+
+# Train model
+model, tl, vl = train(model, X_train, y_train, X_val, y_val, lr=3e-4, batch_size=128, epochs=10)
+loss_curve_shower(tl, vl)
+
+# get Gaussian mixture model from test_x
+gmm = model.predict_model(test_X)
+
+print(gmm)
+
+# Plot contourf of GMM
+contourf_shower(gmm)
+
+# Generate sample data for true density estimation
+A = np.load('A.npy')
+true_test_X = 0
+for i in range(6):
+    true_test_X += A[i] @ test_X[-(i+1)]
+
+np.random.seed(42) ###
+
+test_X_sample = np.zeros((1000, 2))
+for i in range(1000):
+    if np.random.rand() < pi:
+        test_X_sample[i] = true_test_X + np.random.multivariate_normal(mu1, cov)
+    else:
+        test_X_sample[i] = true_test_X + np.random.multivariate_normal(mu2, cov)
+
+Qj3D1 = test_X_sample  # for convenience
+results_true = transport(Qj3D1, nR=40, nS=25, d=2)
+q1_points_true, q2_points_true, q3_points_true = results_true['q1_points'], results_true['q2_points'], results_true['q3_points']
+
+np.random.seed(42)
+# Generate samples from GMM (2000 samples)
+samples = gmm.sample(2000)
+
+#step 2: transport and show results
+results = transport(samples, nR=40, nS=50, d=2)
+plot_results(samples, results)
+
+
+# Figure 2a
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
