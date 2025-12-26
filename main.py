@@ -106,7 +106,7 @@ samples = gmm.sample(1000)
 
 #step 2: transport and show results
 results = transport(samples, nR=40, nS=25, d=2)
-plot_results(samples, results)
+plot_results_appr(samples, results, q1_points_true, q2_points_true, q3_points_true)
 
 
 
