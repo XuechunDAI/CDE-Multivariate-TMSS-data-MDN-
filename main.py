@@ -59,7 +59,7 @@ plot_results(samples, results)
 # Figure 1b
 
 # Generate data
-Xt = load_data_ptimes(p = 6, n = 10000, filename='A.npy')
+Xt = load_data_p_sn(p = 6, n = 10000, filename='A.npy')
 X_train, y_train, X_val, y_val = data_process(Xt, p = 6, r = 0.2)
 print(Xt.shape)
 print(X_train.shape, y_train.shape, X_val.shape, y_val.shape)
@@ -112,7 +112,7 @@ plot_results_appr(samples, results, q1_points_true, q2_points_true, q3_points_tr
 # Figure 1c
 
 # Generate data
-Xt = load_data_ptimes(p = 6, n = 10000, filename='A.npy')
+Xt = load_data_p_t(p = 6, n = 10000, filename='A.npy')
 X_train, y_train, X_val, y_val = data_process(Xt, p = 6, r = 0.2)
 print(Xt.shape)
 print(X_train.shape, y_train.shape, X_val.shape, y_val.shape)
@@ -165,7 +165,7 @@ plot_results_appr(samples, results)
 # Figure 1d
 
 # Generate data
-Xt = load_gaus_mix(p = 6, n = 10000, filename='A.npy')
+Xt = load_gaus_mix_2p(p = 6, n = 10000, filename='A.npy')
 X_train, y_train, X_val, y_val = data_process(Xt, p = 6, r = 0.2)
 print(Xt.shape)
 print(X_train.shape, y_train.shape, X_val.shape, y_val.shape)
@@ -220,6 +220,7 @@ results = transport(samples, nR=40, nS=50, d=2)
 plot_results(samples, results)
 
 
+# Dynamics
 # Figure 2a
 
 
