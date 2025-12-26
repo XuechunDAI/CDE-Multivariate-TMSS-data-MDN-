@@ -1,5 +1,11 @@
 # Load data and preprocessing
 
+import numpy as np
+from scipy.linalg import sqrtm
+from scipy.stats import skewnorm
+from scipy.stats import multivariate_t
+from scipy.stats import multivariate_normal, skewnorm
+
 # VAR(p) - Gaussian noise
 def load_data_ptimes(p = 1, filename = None, n = 1000):
     k = 2
@@ -86,7 +92,92 @@ def load_data_p_sn(p = 1, filename = None, n = 1000):
 
 
 # VAR(p) - t noise
-def load_data_p_t
+def load_data_p_t(p = 1, filename = None, n = 1000, df = 5):
+    k = 2
+    A = np.zeros((p, k, k))
+    if filename is None:
+        for i in range(p):
+            A[i] = np.random.randn(k, k)
+            A[i] /= np.sqrt(abs(np.linalg.det(A[i])))*p
+    else :
+        A = np.load(filename)
+        print('A: ', A.shape)
+
+    D = -A.transpose((0, 2, 1))
+    nn = 500
+    N = nn + n
+
+    # Generate t distributed noise
+    cov = np.array([[1, 0.3], [0.3, 1]])
+    err = multivariate_t.rvs(loc=np.zeros(k), shape=cov, df=df, size=N)
+
+    XXt = np.zeros((k, N))
+    for i in range(p+2, N):
+        for j in range(p):
+            XXt[:, i] += A[j] @ XXt[:, i-j-1]
+        XXt[:, i] += err[i, :]
+
+    Xt = XXt[:, nn:N]
+    Xt = Xt.T
+    if abs(Xt[-1, 0])>10 or abs(Xt[-1, 1])>10 or np.isnan(Xt[-1, 0]) or np.isnan(Xt[-1, 1]):
+        Xt = load_data_ptimes(p = p)
+        return Xt
+    for i in range(p):
+        print(f'A{i}:{A[i]}\n')
+    np.save('A.npy', A)
+
+    return Xt
+
+
+
+# VAR(p) - GMM noise
+mu1 = np.array([-2, -2])
+mu2 = np.array([2, 2])
+cov = np.eye(2)
+pi = 0.5
+
+def load_gaus_mix_2p(p = 1, filename = None, n = 1000, pi = 0.5, seed=42):
+    if seed is not None:
+      np.random.seed(seed)
+
+    k = 2
+    A = np.zeros((p, k, k))
+    if filename is None:
+        for i in range(p):
+            A[i] = np.random.randn(k, k)
+            A[i] /= np.sqrt(abs(np.linalg.det(A[i])))*p
+    else :
+        A = np.load(filename)
+        print('A: ', A.shape)
+
+    D = -A.transpose((0, 2, 1))
+    nn = 500
+    N = nn + n
+
+    # Generate t distributed noise
+    err = np.zeros((k, N))
+    for h in range(1, N):
+      if np.random.rand() < pi:
+        err[:, h] = np.random.multivariate_normal(mu1, cov)
+      else:
+        err[:, h] = np.random.multivariate_normal(mu2, cov)
+
+    XXt = np.zeros((k, N))
+    for i in range(p+2, N):
+        for j in range(p):
+            XXt[:, i] += A[j] @ XXt[:, i-j-1]
+        XXt[:, i] += err[:, i]
+
+    Xt = XXt[:, nn:N]
+    Xt = Xt.T
+    if abs(Xt[-1, 0])>10 or abs(Xt[-1, 1])>10 or np.isnan(Xt[-1, 0]) or np.isnan(Xt[-1, 1]):
+        Xt = load_gaus_mix(p = p, seed=seed) # random seed
+        return Xt
+
+    return Xt
+
+
+
 
 
 
