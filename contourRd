@@ -1,0 +1,244 @@
+# Optimal tranport
+
+pip install POT
+
+import numpy as np
+from scipy.stats import norm, multivariate_normal
+import ot
+import matplotlib.pyplot as plt
+from matplotlib.patches import Circle
+
+# centered at the origin
+def transport(samples, nR=40, nS=25, d=2):
+    """
+    Compute center-outward ranks and quantile points via optimal transport.
+
+    Parameters
+    ----------
+    samples : numpy.ndarray
+        Input data array of shape (n, d), e.g. (1000, 2).
+    nR : int, optional
+        Number of concentric shells / ranks, by default 40.
+    nS : int, optional
+        Number of points on each shell / number of directions, by default 25.
+    d : int, optional
+        Data dimension, by default 2.
+
+    Returns
+    -------
+    dict
+        A dictionary containing:
+        - 'Rn': center-outward ranks
+        - 'q1_points': points corresponding to the 25% quantile (Rank = 10)
+        - 'q2_points': points corresponding to the 52.5% quantile (Rank = 21)
+        - 'q3_points': points corresponding to the 82.5% quantile (Rank = 33)
+        - 'emp': empirical center-outward distribution function values
+    """
+
+    # Center the data at the origin
+    samples[:, 0] -= np.mean(samples[:, 0])
+    samples[:, 1] -= np.mean(samples[:, 1])
+
+    n = samples.shape[0]
+    n0 = n - nR * nS  # Number of points mapped to the origin
+    print("n = ", n)
+
+    # Step 1: Construct a regular grid on the unit ball
+    def regular_grid(nS, nR, n0, d):
+        nn = nS * nR + n0
+        Y = np.zeros((d, nn))
+
+        # Radial component (ranks)
+        length_grid = np.concatenate([
+            np.zeros(n0),
+            np.repeat(np.linspace(1/(nR+1), nR/(nR+1), nR), nS)
+        ])
+
+        # Directional component (unit vectors)
+        if d == 2:
+            angles = 2 * np.pi * np.arange(nS) / nS
+            U = np.vstack([np.cos(angles), np.sin(angles)])
+        else:
+            U = np.random.randn(nS, d)
+            U = U / np.linalg.norm(U, axis=1)[:, np.newaxis]
+            U = U.T
+
+        # Direction grid
+        direction_grid = np.hstack([
+            np.zeros((d, n0)),
+            np.tile(U, nR)
+        ])
+
+        # Final grid
+        Y = length_grid * direction_grid
+        return {'grid': Y, 'direction': direction_grid, 'length': length_grid}
+
+    grid = regular_grid(nS, nR, n0, d)['grid']
+
+    # Step 2: Compute the optimal transport assignment
+    def opt_assign(data, grid):
+        size = data.shape[1]
+
+        # Compute the squared Euclidean distance matrix
+        data_T = data.T
+        grid_T = grid.T
+        dist = np.zeros((size, size))
+        for i in range(size):
+            for j in range(size):
+                dist[i, j] = np.sum((data_T[i] - grid_T[j])**2)
+
+        # Solve the optimal transport problem using POT
+        a, b = np.ones(size) / size, np.ones(size) / size  # Uniform marginals
+        assignment = ot.emd(a, b, dist)
+        return np.argmax(assignment, axis=1)
+
+    # Transpose data to match the R-style implementation
+    data_T = samples.T
+
+    # Optimal assignment
+    assign_idx = opt_assign(data_T, grid)
+    emp = grid[:, assign_idx]
+
+    # Compute center-outward ranks
+    length_emp = np.sqrt(emp[0]**2 + emp[1]**2)
+    Rn = length_emp * (nR + 1)
+
+    # Extract quantile points
+    def get_quantile_points(data, Rn, target_rank, tolerance=0.3):
+        indices = np.where(
+            (Rn > target_rank - tolerance) &
+            (Rn < target_rank + tolerance)
+        )[0]
+        return data[:, indices]
+
+    q1_points = get_quantile_points(data_T, Rn, 10)
+    q2_points = get_quantile_points(data_T, Rn, 21)
+    q3_points = get_quantile_points(data_T, Rn, 33)
+
+    return {
+        'Rn': Rn,
+        'q1_points': q1_points.T,
+        'q2_points': q2_points.T,
+        'q3_points': q3_points.T,
+        'emp': emp.T
+    }
+
+
+# not centered
+def transport(samples, nR=40, nS=25, d=2):
+    """
+    Compute center-outward ranks and quantile points via optimal transport.
+
+    Parameters
+    ----------
+    samples : numpy.ndarray
+        Input data array of shape (n, d), e.g. (1000, 2).
+    nR : int, optional
+        Number of concentric shells / ranks, by default 40.
+    nS : int, optional
+        Number of points on each shell / number of directions, by default 25.
+    d : int, optional
+        Data dimension, by default 2.
+
+    Returns
+    -------
+    dict
+        A dictionary containing:
+        - 'Rn': center-outward ranks
+        - 'q1_points': points corresponding to the 25% quantile (Rank = 10)
+        - 'q2_points': points corresponding to the 52.5% quantile (Rank = 21)
+        - 'q3_points': points corresponding to the 82.5% quantile (Rank = 33)
+        - 'emp': empirical center-outward distribution function values
+    """
+
+    # Center the data at the origin
+    #samples[:, 0] -= np.mean(samples[:, 0])
+    #samples[:, 1] -= np.mean(samples[:, 1])
+
+    n = samples.shape[0]
+    n0 = n - nR * nS  # Number of points mapped to the origin
+    print("n = ", n)
+
+    # Step 1: Construct a regular grid on the unit ball
+    def regular_grid(nS, nR, n0, d):
+        nn = nS * nR + n0
+        Y = np.zeros((d, nn))
+
+        # Radial component (ranks)
+        length_grid = np.concatenate([
+            np.zeros(n0),
+            np.repeat(np.linspace(1/(nR+1), nR/(nR+1), nR), nS)
+        ])
+
+        # Directional component (unit vectors)
+        if d == 2:
+            angles = 2 * np.pi * np.arange(nS) / nS
+            U = np.vstack([np.cos(angles), np.sin(angles)])
+        else:
+            U = np.random.randn(nS, d)
+            U = U / np.linalg.norm(U, axis=1)[:, np.newaxis]
+            U = U.T
+
+        # Direction grid
+        direction_grid = np.hstack([
+            np.zeros((d, n0)),
+            np.tile(U, nR)
+        ])
+
+        # Final grid
+        Y = length_grid * direction_grid
+        return {'grid': Y, 'direction': direction_grid, 'length': length_grid}
+
+    grid = regular_grid(nS, nR, n0, d)['grid']
+
+    # Step 2: Compute the optimal transport assignment
+    def opt_assign(data, grid):
+        size = data.shape[1]
+
+        # Compute the squared Euclidean distance matrix
+        data_T = data.T
+        grid_T = grid.T
+        dist = np.zeros((size, size))
+        for i in range(size):
+            for j in range(size):
+                dist[i, j] = np.sum((data_T[i] - grid_T[j])**2)
+
+        # Solve the optimal transport problem using POT
+        a, b = np.ones(size) / size, np.ones(size) / size  # Uniform marginals
+        assignment = ot.emd(a, b, dist)
+        return np.argmax(assignment, axis=1)
+
+    # Transpose data to match the R-style implementation
+    data_T = samples.T
+
+    # Optimal assignment
+    assign_idx = opt_assign(data_T, grid)
+    emp = grid[:, assign_idx]
+
+    # Compute center-outward ranks
+    length_emp = np.sqrt(emp[0]**2 + emp[1]**2)
+    Rn = length_emp * (nR + 1)
+
+    # Extract quantile points
+    def get_quantile_points(data, Rn, target_rank, tolerance=0.3):
+        indices = np.where(
+            (Rn > target_rank - tolerance) &
+            (Rn < target_rank + tolerance)
+        )[0]
+        return data[:, indices]
+
+    q1_points = get_quantile_points(data_T, Rn, 10)
+    q2_points = get_quantile_points(data_T, Rn, 21)
+    q3_points = get_quantile_points(data_T, Rn, 33)
+
+    return {
+        'Rn': Rn,
+        'q1_points': q1_points.T,
+        'q2_points': q2_points.T,
+        'q3_points': q3_points.T,
+        'emp': emp.T
+    }
+
+
+
+
