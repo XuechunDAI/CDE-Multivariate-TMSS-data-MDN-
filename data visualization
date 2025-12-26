@@ -130,7 +130,7 @@ def plot_sorted_polygon(points, color="red", linewidth=1.5):
 
 
 # Adjusted plot_results function (for which without closed forms)
-def plot_results_appr(samples, results):
+def plot_results_appr(samples, results, q1_points_true, q2_points_true, q3_points_true):
     plt.figure(figsize=(10, 10))
 
     # Plot the empirical center outward distribution function 
