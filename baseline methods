@@ -1,0 +1,28 @@
+# baseline methods
+
+
+
+
+def compute_psi_matrices(Phi, Theta, max_lag=30):
+
+    """
+    parameter matrix of VAR(∞): Ψⱼ = (-Θ)^{j-1} * (Φ + Θ)
+    return: Ψ_list = [Ψ₁, Ψ₂, ..., Ψ_max_lag]
+    """
+    Psi_list = []
+    Psi_1 = Phi + Theta  # Ψ₁ = Φ + Θ
+    Psi_list.append(Psi_1)
+
+    # Ψⱼ = (-Θ)^{j-1} * (Φ + Θ) for j ≥ 2
+    neg_Theta = -Theta
+    power_neg_Theta = np.eye(2)  # initialized as I (when j=1)
+
+    for j in range(2, max_lag + 1):
+        power_neg_Theta = power_neg_Theta @ neg_Theta  # (-Θ)^{j-1}
+        Psi_j = power_neg_Theta @ (Phi + Theta)
+        Psi_list.append(Psi_j)
+
+    return Psi_list
+
+# Psi_list = compute_psi_matrices(Phi, Theta, max_lag=10)
+
