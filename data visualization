@@ -164,10 +164,9 @@ def plot_results_appr(samples, results, q1_points_true, q2_points_true, q3_point
 
 
 
-# adjusted mean/l0cation
+# adjusted mean/location
 def plot_results_admean(samples, results, mean_test = mean_true_testX):
     plt.figure(figsize=(10, 10))
-
 
     # Plot the empirical center outward distribution function
     emp = results['emp']
@@ -195,7 +194,44 @@ def plot_results_admean(samples, results, mean_test = mean_true_testX):
 
     plt.axis('equal')
     plt.legend(loc='upper left')
-    #plt.title("Center-Outward Ranks and Quantiles")
     plt.title(f"Center-Outward Ranks and Quantiles (p=10)")
     plt.show()
+
+
+# for BEKK
+def plot_results_bekk(samples, results, mean_test = mean_true_testX, Sigma_test = Sigma_true_testX):
+    plt.figure(figsize=(10, 10))
+
+    # Plot the empirical center outward distribution function
+    emp = results['emp']
+
+    # Plot points
+    plt.scatter(samples[:, 0], samples[:, 1], c='gray', s=10, alpha=0.5)
+
+    # Plot quantiles
+    q1 = results['q1_points']
+    q2 = results['q2_points']
+    q3 = results['q3_points']
+
+    plt.scatter(q1[:, 0], q1[:, 1], c='red', marker='s', s=50, label="24.4% quantile (Rank = 10)")
+    plt.scatter(q2[:, 0], q2[:, 1], c='blue', marker='^', s=50, label="51.2% quantile (Rank = 21)")
+    plt.scatter(q3[:, 0], q3[:, 1], c='purple', marker='*', s=100, label="80.5% quantile (Rank = 33)")
+
+    # compute the true mean and covariance
+    mean_test = mean_true_testX    #computed
+    Sigma_test = Sigma_true_testX
+
+    # Calculate the width and height of the ellipse
+    for q, c in zip([10 / 40, 21 / 40, 33 / 40], ['red', 'blue', 'purple']):
+        ellipse = confidence_ellipse(mean = mean_test, cov = Sigma_test, q = q, color = c)
+        plt.gca().add_patch(ellipse)
+
+    plt.axis('equal')
+    plt.legend(loc='upper left')
+    plt.title(f"Center-Outward Ranks and Quantiles (p=10)")
+    plt.show()
+
+
+
+
 
