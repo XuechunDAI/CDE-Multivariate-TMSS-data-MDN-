@@ -594,6 +594,108 @@ def compute_wasserstein_nonl(x_grid, A_param, Sigma_param, m=200, random_state=4
     return distances
 
 
+# 6D
+
+def compute_wasserstein(x_grid, A, Sigma, A_param, Sigma_param, m=200, random_state=42):
+
+    #rng = np.random.default_rng(random_state)
+    #distances_param = [], distances_kernel = [], distances_mdn = []
+    distances = {
+        'param': {'q1': [], 'q2': [], 'q3': []},
+        'kernel': {'q1': [], 'q2': [], 'q3': []},
+        'mdn': {'q1': [], 'q2': [], 'q3': []}}
+
+    for x0 in x_grid:
+
+        # true density P0
+        mean_true = A @ x0
+        cov_true = Sigma
+        Y_true = np.random.multivariate_normal(mean_true, cov_true, size=m)
+
+        # parametric P1
+        mean_param = A_param @ x0
+        cov_param = Sigma_param
+        Y_param = np.random.multivariate_normal(mean_param, cov_param, size=m)
+
+        # kernle P2
+        Y_kernel = sample_kde(x0, m)
+
+        # mdn P3
+        gmm = model.predict_model(x0)
+        Y_mdn = gmm.sample(m)
+
+        # transport the samples
+        Y_true_results = transport(Y_true, nR=40, nS=25, d=6, verbose=False)
+        Y_param_results = transport(Y_param, nR=40, nS=25, d=6, verbose=False)
+        Y_kernel_results = transport(Y_kernel, nR=40, nS=25, d=6, verbose=False)
+        Y_mdn_results = transport(Y_mdn, nR=40, nS=25, d=6, verbose=False)
+
+        # rank point
+        Y_true_q1 = Y_true_results['q1_points']
+        Y_param_q1 = Y_param_results['q1_points']
+        Y_kernel_q1 = Y_kernel_results['q1_points']
+        Y_mdn_q1 = Y_mdn_results['q1_points']
+
+        Y_true_q2 = Y_true_results['q2_points']
+        Y_param_q2 = Y_param_results['q2_points']
+        Y_kernel_q2 = Y_kernel_results['q2_points']
+        Y_mdn_q2 = Y_mdn_results['q2_points']
+
+        Y_true_q3 = Y_true_results['q3_points']
+        Y_param_q3 = Y_param_results['q3_points']
+        Y_kernel_q3 = Y_kernel_results['q3_points']
+        Y_mdn_q3 = Y_mdn_results['q3_points']
+
+        # Wasserstein-2
+        m_adj = len(Y_true_q1) 
+
+        a = np.ones(m_adj) / m_adj
+        b = np.ones(m_adj) / m_adj
+
+        # ==================== q1 ====================
+        M_param_q1 = ot.dist(Y_true_q1, Y_param_q1, metric='euclidean')**2
+        M_kernel_q1 = ot.dist(Y_true_q1, Y_kernel_q1, metric='euclidean')**2
+        M_mdn_q1 = ot.dist(Y_true_q1, Y_mdn_q1, metric='euclidean')**2
+
+        W2_sq_param_q1 = ot.emd2(a, b, M_param_q1)
+        W2_sq_kernel_q1 = ot.emd2(a, b, M_kernel_q1)
+        W2_sq_mdn_q1 = ot.emd2(a, b, M_mdn_q1)
+
+        distances['param']['q1'].append(np.sqrt(W2_sq_param_q1))
+        distances['kernel']['q1'].append(np.sqrt(W2_sq_kernel_q1))
+        distances['mdn']['q1'].append(np.sqrt(W2_sq_mdn_q1))
+
+        # ==================== q2 ====================
+        M_param_q2 = ot.dist(Y_true_q2, Y_param_q2, metric='euclidean')**2
+        M_kernel_q2 = ot.dist(Y_true_q2, Y_kernel_q2, metric='euclidean')**2
+        M_mdn_q2 = ot.dist(Y_true_q2, Y_mdn_q2, metric='euclidean')**2
+
+        W2_sq_param_q2 = ot.emd2(a, b, M_param_q2)
+        W2_sq_kernel_q2 = ot.emd2(a, b, M_kernel_q2)
+        W2_sq_mdn_q2 = ot.emd2(a, b, M_mdn_q2)
+
+        distances['param']['q2'].append(np.sqrt(W2_sq_param_q2))
+        distances['kernel']['q2'].append(np.sqrt(W2_sq_kernel_q2))
+        distances['mdn']['q2'].append(np.sqrt(W2_sq_mdn_q2))
+
+        # ==================== q3 ====================
+        M_param_q3 = ot.dist(Y_true_q3, Y_param_q3, metric='euclidean')**2
+        M_kernel_q3 = ot.dist(Y_true_q3, Y_kernel_q3, metric='euclidean')**2
+        M_mdn_q3 = ot.dist(Y_true_q3, Y_mdn_q3, metric='euclidean')**2
+
+        W2_sq_param_q3 = ot.emd2(a, b, M_param_q3)
+        W2_sq_kernel_q3 = ot.emd2(a, b, M_kernel_q3)
+        W2_sq_mdn_q3 = ot.emd2(a, b, M_mdn_q3)
+
+        distances['param']['q3'].append(np.sqrt(W2_sq_param_q3))
+        distances['kernel']['q3'].append(np.sqrt(W2_sq_kernel_q3))
+        distances['mdn']['q3'].append(np.sqrt(W2_sq_mdn_q3))
+
+    for method in distances:
+      for quantile in distances[method]:
+        distances[method][quantile] = np.array(distances[method][quantile])
+
+    return distances
 
 
 
