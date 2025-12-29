@@ -269,7 +269,45 @@ samples = gmm.sample(2000)
 results = transport(samples, nR=40, nS=50, d=2)
 plot_results_admean(samples, results)
 
-## 3b
+## Figure 3b
+
+len_train = X_train.shape[0] - 1 + X_train.shape[1]
+data_train = Xt[:len_train, :]
+df = pd.DataFrame({
+    'dim1': data_train[:, 0],
+    'dim2': data_train[:, 1]
+})
+
+model_varma = VARMAX(df, order=(1, 1))
+results_varma = model_varma.fit(disp=True)
+mu_param = results_varma.params[:2].values.reshape(2, )
+ar_coefs = results_varma.params[2:6].values.reshape(2, 2)
+ma_coefs = results_varma.params[6:10].values.reshape(2, 2)
+L = np.array([[results_varma.params['sqrt.var.dim1'], 0],
+              [results_varma.params['sqrt.cov.dim1.dim2'], results_varma.params['sqrt.var.dim2']]])
+Sigma_param = L @ L.T
+
+# KDE
+standardized_residuals = calculate_residuals_varma(X_train, Psi_list, Sigma_param)
+kde_residuals = KDEMultivariate(standardized_residuals,
+                               bw='normal_reference',
+                               var_type='cc')
+
+# prepare data
+X_val_200 = X_val[0:200, :, :]
+distances_200 = compute_wasserstein_varma(X_val_200, Phi, Theta, Sigma, mu_param, ar_coefs, ma_coefs, Sigma_param, m=1000)
+
+ranks = [('rank 10', 'q1'), ('rank 21', 'q2'), ('rank 33', 'q3')]
+for rank_name, rank_key in ranks:
+    plot_WD2(distances_200, rank_name, rank_key)
+
+mdn_data = [distances_200['mdn'][key] for key in ['q1', 'q2', 'q3']]
+plt.figure()
+plt.boxplot(mdn_data)
+plt.xticks([1, 2, 3], ['rank10', 'rank21', 'rank33'])
+plt.title('Distribution of W2 distances at different ranks')
+plt.ylabel('Wasserstein Distance')
+plt.show()
 
 
 
