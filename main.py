@@ -362,7 +362,27 @@ list_Sigma_param <- list_Sigma_param
 
 list_Sigma_param = np.array(r['list_Sigma_param'])
 
+# KDE
+standardized_residuals = calculate_residuals(data, list_Sigma_param)
+kde_residuals = KDEMultivariate(standardized_residuals,
+                               bw='normal_reference',
+                               var_type='cc')
 
+# prepare data
+X_val_200 = np.squeeze(X_val[0:200, :, :])
+distances_200 = compute_wasserstein(X_val_200, m=1000)
+
+ranks = [('rank 10', 'q1'), ('rank 21', 'q2'), ('rank 33', 'q3')]
+for rank_name, rank_key in ranks:
+    plot_WD2(distances_200, rank_name, rank_key)
+
+mdn_data = [distances_200['mdn'][key] for key in ['q1', 'q2', 'q3']]
+plt.figure()
+plt.boxplot(mdn_data)
+plt.xticks([1, 2, 3], ['rank10', 'rank21', 'rank33'])
+plt.title('Distribution of W2 distances at different ranks')
+plt.ylabel('Wasserstein Distance')
+plt.show()
 
 
 # Figure 2c, 3d
@@ -463,7 +483,11 @@ results_param = model_param.fit(1)
 A_param = np.squeeze(results_param.coefs)
 Sigma_param = results_param.sigma_u       # Parametric results
 
-################
+standardized_residuals = calculate_residuals(data_train, A_param, Sigma_param)
+
+kde_residuals = KDEMultivariate(standardized_residuals,
+                               bw='normal_reference',
+                               var_type='cc')                  # apply KDE
 
 # prepare data
 X_val_200 = np.squeeze(X_val[0:200, :, :])
