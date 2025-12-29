@@ -11,12 +11,13 @@ drive.mount('/content/drive')  # Mount Google Drive
 load_data_ptimes(p=6, n=10000, filename='/content/drive/MyDrive/thesis/pre-code/A.npy')
 
 import numpy as np
-#from model_setup import RNN, train
+#from model_setup_2D import RNN, train
 import torch
 import matplotlib.pyplot as plt
-#from data_loader import data_process, load_data, load_data_ptimes
+#from load_data import data_process, load_data, load_data_ptimes
 #from data_view import contourf_shower, loss_curve_shower
 #from contourRd import transport, plot_results
+#from baseline_methods import 
 
 
 
@@ -220,7 +221,7 @@ samples = gmm.sample(2000)
 
 #step 2: transport and show results
 results = transport(samples, nR=40, nS=50, d=2)
-plot_results(samples, results)
+plot_results_appr(samples, results)
 
 
 
@@ -320,6 +321,94 @@ plot_results(samples, results)
 
 ## 3c
 
+
+
+# Figure 2c, 3d
+
+# Generate data
+data_dict = load_data_nonlinear(n = 10000)
+Xt = data_dict["Xt"]
+err = data_dict["err"]
+
+X_train, y_train, X_val, y_val = data_process(Xt, p = 1, r = 0.2)
+print(X_train.shape, y_train.shape, X_val.shape, y_val.shape)
+
+test_X = X_val[-5]
+test_y = y_val[-5]
+
+set_seed(42)
+# Define model
+torch.set_default_dtype(torch.float64)
+model = RNN(gause_mixture_n=10)
+
+# Train model
+model, tl, vl = train(model, X_train, y_train, X_val, y_val, lr=3e-4, batch_size=128, epochs=10)
+loss_curve_shower(tl, vl)
+
+# get Gaussian mixture model from test_x
+gmm = model.predict_model(test_X)
+
+print(gmm)
+
+# Plot contourf of GMM
+contourf_shower(gmm)
+
+# Generate sample data for true density estimation
+def con_mean(test):
+
+    X1, X2 = np.squeeze(test)
+    normX = np.sqrt(X1**2 + X2**2)
+    f1 = 0.5 * np.sin(X1 + X2) + 0.25 * np.tanh(normX)
+    f2 = (1/3) * np.cos(X1 - X2) + 0.2 * X1 / (1 + normX)
+
+    con_mean = np.array([f1, f2])
+
+    return con_mean
+
+def con_cov(test):
+
+    X1, X2 = np.squeeze(test)
+    normX = np.sqrt(X1**2 + X2**2)
+    noise_scale = 0.4 * (np.sin(normX / 5) / (2 + normX**2) + 0.5)
+
+    cov = np.eye(2)
+    con_cov = (noise_scale ** 2) * cov
+
+    return con_cov
+
+true_test_X = con_mean(test_X) # true mean
+
+test_X_sample = np.zeros((1000, 2))
+err_sample = np.zeros((1000, 2))
+X1, X2 = test_X[0][0], test_X[0][1]
+normX = np.sqrt(X1**2 + X2**2)
+noise_scale = 0.4 * (np.sin(normX / 5) / (2 + normX**2) + 0.5)
+
+for h in range(1000):
+  u = np.random.rand()
+  if u < pi1:
+    err_sample[h] = np.random.multivariate_normal(mu1, cov)
+  elif u < pi1 + pi2:
+    err_sample[h] = np.random.multivariate_normal(mu2, cov)
+  else:
+    err_sample[h] = np.random.multivariate_normal(mu3, cov)
+
+  test_X_sample[h] = true_test_X + noise_scale * err_sample[h]
+
+Qj3D1 = test_X_sample  # for convenience
+results_true = transport(Qj3D1, nR=40, nS=25, d=2)
+
+q1_points_true, q2_points_true, q3_points_true = results_true['q1_points'], results_true['q2_points'], results_true['q3_points']
+
+np.random.seed(42)
+# Generate samples from GMM
+samples = gmm.sample(1000)
+
+#step 2: transport and show results
+results = transport(samples, nR=40, nS=25, d=2)
+plot_results_appr(samples, results)
+
+## 3d
 
 
 
