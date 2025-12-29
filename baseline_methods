@@ -75,6 +75,53 @@ def sample_kde(x_test, n_samples=1):
     return samples
 
 
+# for VARMA
+
+def calculate_residuals_varma(X, Psi_list, Sigma):
+    standardized_residuals = []
+
+    for i in range(1, len(X)):
+        conditional_var = X[i-1]
+        current_obs = y_train[i]
+
+        #residual = current_obs - mu_func(conditional_var)
+
+        mean_cond = np.zeros(2)
+        t = len(Psi_list)
+        for j in range(1, t + 1):
+          mean_cond += Psi_list[j-1] @ conditional_var[t - j]
+
+        residual = current_obs - mean_cond
+
+        L = np.linalg.cholesky(Sigma)
+        Linv = np.linalg.inv(L)
+        standardized_residual = Linv @ residual
+
+        standardized_residuals.append(standardized_residual)
+
+    return np.array(standardized_residuals)
+
+def sample_kde_varma(x_test, n_samples=1):
+    conditional_mean = np.zeros(2)
+    t = len(Psi_list)
+    for j in range(1, t + 1):
+      conditional_mean += Psi_list[j-1] @ x_test[t - j]
+
+    conditional_cov = Sigma_param
+    n_residuals = len(standardized_residuals)
+
+    random_indices = np.random.randint(0, n_residuals, size=n_samples)
+    standardized_samples = standardized_residuals[random_indices] + \
+                          kde_residuals.bw * np.random.randn(n_samples, 2)
+
+    L = np.linalg.cholesky(conditional_cov)
+    samples = conditional_mean + standardized_samples @ L.T
+
+    return samples
+
+
+
+
 # for BEKK
 
 def calculate_residuals_bekk(X, H):
@@ -231,7 +278,7 @@ def compute_wasserstein(x_grid, A_param, Sigma_param, m=200, random_state=42):
 
 
 
-def compute_wasserstein_bekk(x_grid, A_param, Sigma_param, m=200, random_state=42):
+def compute_wasserstein_bekk(x_grid, m=200, random_state=42):
 
     #rng = np.random.default_rng(random_state)
     #distances_param = [], distances_kernel = [], distances_mdn = []
@@ -336,6 +383,113 @@ def compute_wasserstein_bekk(x_grid, A_param, Sigma_param, m=200, random_state=4
 
     return distances
 
+# 
+
+def compute_wasserstein_varma(x_grid, Phi, Theta, Sigma, mu_param, ar_coefs, ma_coefs, Sigma_param, m=200, random_state=42):
+
+    #rng = np.random.default_rng(random_state)
+    #distances_param = [], distances_kernel = [], distances_mdn = []
+    distances = {
+        'param': {'q1': [], 'q2': [], 'q3': []},
+        'kernel': {'q1': [], 'q2': [], 'q3': []},
+        'mdn': {'q1': [], 'q2': [], 'q3': []}}
+
+    for x0_mdn in x_grid:
+
+        # x0 and x0_eps
+        x0 = x0_mdn[-1, ]  # (2,)
+        index = np.where(Xt == x0)
+        x0_eps = eps[index[0][0], ]  # (2,)
+
+        # true density P0
+        mean_true = Phi @ x0 + Theta @ x0_eps
+        cov_true = Sigma
+        Y_true = np.random.multivariate_normal(mean_true, cov_true, size=m)
+
+        # parametric P1
+        mean_param = mu_param + ar_coefs @ x0 + ma_coefs @ x0_eps # with estimated intercept
+        cov_param = Sigma_param
+        Y_param = np.random.multivariate_normal(mean_param, cov_param, size=m)
+
+        # kernel P2
+        Y_kernel = sample_kde_varma(x0_mdn, m)
+
+        # mdn P3
+        gmm = model.predict_model(x0_mdn)
+        Y_mdn = gmm.sample(m)
+
+        # transport the samples
+        Y_true_results = transport(Y_true, nR=40, nS=25, d=2, verbose=False)
+        Y_param_results = transport(Y_param, nR=40, nS=25, d=2, verbose=False)
+        Y_kernel_results = transport(Y_kernel, nR=40, nS=25, d=2, verbose=False)
+        Y_mdn_results = transport(Y_mdn, nR=40, nS=25, d=2, verbose=False)
+
+        # rank point
+        Y_true_q1 = Y_true_results['q1_points']
+        Y_param_q1 = Y_param_results['q1_points']
+        Y_kernel_q1 = Y_kernel_results['q1_points']
+        Y_mdn_q1 = Y_mdn_results['q1_points']
+
+        Y_true_q2 = Y_true_results['q2_points']
+        Y_param_q2 = Y_param_results['q2_points']
+        Y_kernel_q2 = Y_kernel_results['q2_points']
+        Y_mdn_q2 = Y_mdn_results['q2_points']
+
+        Y_true_q3 = Y_true_results['q3_points']
+        Y_param_q3 = Y_param_results['q3_points']
+        Y_kernel_q3 = Y_kernel_results['q3_points']
+        Y_mdn_q3 = Y_mdn_results['q3_points']
+
+        # Wasserstein-2
+        m_adj = len(Y_true_q1)
+
+        a = np.ones(m_adj) / m_adj
+        b = np.ones(m_adj) / m_adj
+
+        # ==================== q1 ====================
+        M_param_q1 = ot.dist(Y_true_q1, Y_param_q1, metric='euclidean')**2
+        M_kernel_q1 = ot.dist(Y_true_q1, Y_kernel_q1, metric='euclidean')**2
+        M_mdn_q1 = ot.dist(Y_true_q1, Y_mdn_q1, metric='euclidean')**2
+
+        W2_sq_param_q1 = ot.emd2(a, b, M_param_q1)
+        W2_sq_kernel_q1 = ot.emd2(a, b, M_kernel_q1)
+        W2_sq_mdn_q1 = ot.emd2(a, b, M_mdn_q1)
+
+        distances['param']['q1'].append(np.sqrt(W2_sq_param_q1))
+        distances['kernel']['q1'].append(np.sqrt(W2_sq_kernel_q1))
+        distances['mdn']['q1'].append(np.sqrt(W2_sq_mdn_q1))
+
+        # ==================== q2 ====================
+        M_param_q2 = ot.dist(Y_true_q2, Y_param_q2, metric='euclidean')**2
+        M_kernel_q2 = ot.dist(Y_true_q2, Y_kernel_q2, metric='euclidean')**2
+        M_mdn_q2 = ot.dist(Y_true_q2, Y_mdn_q2, metric='euclidean')**2
+
+        W2_sq_param_q2 = ot.emd2(a, b, M_param_q2)
+        W2_sq_kernel_q2 = ot.emd2(a, b, M_kernel_q2)
+        W2_sq_mdn_q2 = ot.emd2(a, b, M_mdn_q2)
+
+        distances['param']['q2'].append(np.sqrt(W2_sq_param_q2))
+        distances['kernel']['q2'].append(np.sqrt(W2_sq_kernel_q2))
+        distances['mdn']['q2'].append(np.sqrt(W2_sq_mdn_q2))
+
+        # ==================== q3 ====================
+        M_param_q3 = ot.dist(Y_true_q3, Y_param_q3, metric='euclidean')**2
+        M_kernel_q3 = ot.dist(Y_true_q3, Y_kernel_q3, metric='euclidean')**2
+        M_mdn_q3 = ot.dist(Y_true_q3, Y_mdn_q3, metric='euclidean')**2
+
+        W2_sq_param_q3 = ot.emd2(a, b, M_param_q3)
+        W2_sq_kernel_q3 = ot.emd2(a, b, M_kernel_q3)
+        W2_sq_mdn_q3 = ot.emd2(a, b, M_mdn_q3)
+
+        distances['param']['q3'].append(np.sqrt(W2_sq_param_q3))
+        distances['kernel']['q3'].append(np.sqrt(W2_sq_kernel_q3))
+        distances['mdn']['q3'].append(np.sqrt(W2_sq_mdn_q3))
+
+    for method in distances:
+      for quantile in distances[method]:
+        distances[method][quantile] = np.array(distances[method][quantile])
+
+    return distances
 
 
 
