@@ -254,6 +254,10 @@ print(gmm)
 # Plot contourf of GMM
 contourf_shower(gmm)
 
+mean_true_testX = Phi @ test_X[-1] + Theta @ eps[-6] # compute the mean
+
+
+
 
 
 
