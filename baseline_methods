@@ -54,15 +54,6 @@ def calculate_residuals(X, A, Sigma):
 
     return np.array(standardized_residuals)
 
-# parameters from parametric estimation
-standardized_residuals = calculate_residuals(data_train, A_param, Sigma_param)
-
-# apply KDE
-kde_residuals = KDEMultivariate(standardized_residuals,
-                               bw='normal_reference',
-                               var_type='cc')
-
-
 # sampling from KDE
 
 def sample_kde(x_test, n_samples=1):
