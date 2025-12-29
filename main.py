@@ -15,7 +15,7 @@ import numpy as np
 import torch
 import matplotlib.pyplot as plt
 #from load_data import data_process, load_data, load_data_ptimes
-#from data_view import contourf_shower, loss_curve_shower
+#from data_view import contourf_shower, loss_curve_shower, plot_WD2
 #from contourRd import transport, plot_results
 #from baseline_methods import compute_psi_matrices
 
@@ -321,6 +321,48 @@ plot_results(samples, results)
 
 ## 3c
 
+data = np.squeeze(X_train)
+data_Sigma = Sigma[0:len(X_train)]
+pd.DataFrame(data).to_csv("data.csv", index=False)
+
+%%R
+data_r <- read.csv("data.csv")
+data_r <- as.matrix(data_r)
+
+spec <- bekk_spec()
+model_bekk <- bekk_fit(spec, data_r, QML_t_ratios = TRUE, max_iter = 50)
+C_matrix <- model_bekk$C0
+A_matrix <- model_bekk$A
+G_matrix <- model_bekk$G
+
+T <- nrow(model_bekk$H_t)
+list_Sigma_param <- array(NA, dim = c(2, 2, T))
+for (t in 1:T) {
+  list_Sigma_param[, , t] <- matrix(model_bekk$H_t[t, ], nrow = 2, byrow = TRUE)
+}
+# ===== finish R environment =====
+
+# transform to Python object
+from rpy2.robjects import r
+
+r('''
+params <- model_bekk$est.params
+C_param <- model_bekk$C0
+A_param <- model_bekk$A
+G_param <- model_bekk$G
+''')
+
+C_param = np.squeeze(np.array(r['C_param']))
+A_param = np.squeeze(np.array(r['A_param']))
+G_param = np.squeeze(np.array(r['G_param']))
+
+r('''
+list_Sigma_param <- list_Sigma_param
+''')
+
+list_Sigma_param = np.array(r['list_Sigma_param'])
+
+
 
 
 # Figure 2c, 3d
@@ -408,7 +450,7 @@ samples = gmm.sample(1000)
 results = transport(samples, nR=40, nS=25, d=2)
 plot_results_appr(samples, results)
 
-## 3d
+## Figure 3d
 
 len_train = X_train.shape[0] - 1 + X_train.shape[1]
 print(len_train)
@@ -419,7 +461,25 @@ model_param = VAR(df)
 results_param = model_param.fit(1)
 
 A_param = np.squeeze(results_param.coefs)
-Sigma_param = results_param.sigma_u
+Sigma_param = results_param.sigma_u       # Parametric results
+
+################
+
+# prepare data
+X_val_200 = np.squeeze(X_val[0:200, :, :])
+distances_200 = compute_wasserstein(X_val_200, A_param, Sigma_param, m=1000)
+
+ranks = [('rank 10', 'q1'), ('rank 21', 'q2'), ('rank 33', 'q3')]
+for rank_name, rank_key in ranks:
+    plot_WD2(distances_200, rank_name, rank_key)
+
+mdn_data = [distances_200['mdn'][key] for key in ['q1', 'q2', 'q3']]
+plt.figure()
+plt.boxplot(mdn_data)
+plt.xticks([1, 2, 3], ['rank10', 'rank21', 'rank33'])
+plt.title('Distribution of W2 distances at different ranks')
+plt.ylabel('Wasserstein Distance')
+plt.show()
 
 
 
