@@ -6,6 +6,30 @@ from scipy.stats import skewnorm
 from scipy.stats import multivariate_t
 from scipy.stats import multivariate_normal
 
+
+# VAR(1)
+def load_data(filename = None, n = 1000):
+    if filename is not None:
+        Xt = np.load(filename)
+    else:
+        k = 2
+        A = np.array([[0.2, -0.6], [0.3, 1.1]])
+
+        D = -A.T
+        nn = 500 
+        N = n + nn
+        cov = np.array([[1, 0.3], [0.3, 1]])
+        err = np.random.multivariate_normal(mean=np.zeros(k), cov=cov, size=N)
+
+        XXt = np.zeros((k, N))
+        for i in range(10, N):
+            XXt[:, i] = A @ XXt[:, i-1] + err[i, :]
+
+        Xt = XXt[:, nn:N]
+
+        return Xt.T
+
+
 # VAR(p) - Gaussian noise
 def load_data_ptimes(p = 1, filename = None, n = 1000):
     k = 2
@@ -24,6 +48,7 @@ def load_data_ptimes(p = 1, filename = None, n = 1000):
     N = nn + n
     cov = np.array([[1, 0.3], [0.3, 1]])
     err = np.random.multivariate_normal(mean=np.zeros(k), cov=cov, size=N)
+
     XXt = np.zeros((k, N))
     for i in range(p+2, N):
         for j in range(p):
