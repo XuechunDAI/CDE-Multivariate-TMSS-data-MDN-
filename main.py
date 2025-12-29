@@ -555,6 +555,9 @@ plt.show()
 
 
 
+# Figure 3a
+
+
 
 
 
