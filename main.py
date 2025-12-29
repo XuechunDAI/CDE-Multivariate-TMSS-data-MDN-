@@ -362,15 +362,25 @@ list_Sigma_param <- list_Sigma_param
 
 list_Sigma_param = np.array(r['list_Sigma_param'])
 
+# unconditional covariance
+Sigma_uncond = list_Sigma_param[:, :, -1].copy()
+
+for iter in range(1000):
+    Sigma_new = C_param.T @ C_param + A_param @ Sigma_uncond @ A_param.T + G_param @ Sigma_uncond @ G_param.T
+    if np.max(np.abs(Sigma_new - Sigma_uncond)) < 1e-8:
+        break
+
+    Sigma_uncond = Sigma_new.copy()
+
 # KDE
-standardized_residuals = calculate_residuals(data, list_Sigma_param)
+standardized_residuals = calculate_residuals_bekk(data, list_Sigma_param)
 kde_residuals = KDEMultivariate(standardized_residuals,
                                bw='normal_reference',
                                var_type='cc')
 
 # prepare data
 X_val_200 = np.squeeze(X_val[0:200, :, :])
-distances_200 = compute_wasserstein(X_val_200, m=1000)
+distances_200 = compute_wasserstein_bekk(X_val_200, m=1000)
 
 ranks = [('rank 10', 'q1'), ('rank 21', 'q2'), ('rank 33', 'q3')]
 for rank_name, rank_key in ranks:
