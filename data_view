@@ -232,6 +232,22 @@ def plot_results_bekk(samples, results, mean_test = mean_true_testX, Sigma_test 
     plt.show()
 
 
+# 
+
+def plot_WD2(distances, rank_name, rank_key):
+   
+    data = [
+        distances['param'][rank_key],
+        distances['kernel'][rank_key],
+        distances['mdn'][rank_key]
+    ]
+    plt.figure()
+    plt.boxplot(data)
+    plt.xticks([1, 2, 3], ['Parametric', 'KDE', 'MDN'])
+    plt.title(f'Distribution of W2 distances ({rank_name})')
+    plt.ylabel('Wasserstein Distance')
+    plt.show()
+
 
 
 
