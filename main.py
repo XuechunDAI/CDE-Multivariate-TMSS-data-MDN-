@@ -47,6 +47,7 @@ print(gmm)
 # Plot contourf of GMM
 contourf_shower(gmm)
 
+np.random.seed(42)
 # Generate samples from GMM
 samples = gmm.sample(1000)
 
@@ -101,6 +102,7 @@ Qj3D1 = test_X_sample  # for convenience
 results_true = transport(Qj3D1, nR=40, nS=25, d=2)
 q1_points_true, q2_points_true, q3_points_true = results_true['q1_points'], results_true['q2_points'], results_true['q3_points']
 
+np.random.seed(42)
 # Generate samples from GMM
 samples = gmm.sample(1000)
 
@@ -154,6 +156,7 @@ Qj3D1 = test_X_sample  # for convenience
 results_true = transport(Qj3D1, nR=40, nS=25, d=2)
 q1_points_true, q2_points_true, q3_points_true = results_true['q1_points'], results_true['q2_points'], results_true['q3_points']
 
+np.random.seed(42)
 # Generate samples from GMM (2000 samples)
 samples = gmm.sample(2000)
 
@@ -220,8 +223,9 @@ results = transport(samples, nR=40, nS=50, d=2)
 plot_results(samples, results)
 
 
+
 # Dynamics
-# Figure 2a
+# Figure 2a, 3b
 
 # Generate data
 data_dict = load_arma(p = 1, n = 10000)
@@ -254,7 +258,22 @@ print(gmm)
 # Plot contourf of GMM
 contourf_shower(gmm)
 
-mean_true_testX = Phi @ test_X[-1] + Theta @ eps[-6] # compute the mean
+mean_true_testX = Phi @ test_X[-1] + Theta @ eps[-6] # compute the true mean
+
+np.random.seed(42)
+# Generate samples from GMM
+samples = gmm.sample(2000)
+
+#step 2: transport and show results
+results = transport(samples, nR=40, nS=50, d=2)
+plot_results(samples, results)
+
+## 3b
+
+
+
+# Figure 2b, 3c
+
 
 
 
