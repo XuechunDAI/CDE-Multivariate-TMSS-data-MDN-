@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 #from load_data import data_process, load_data, load_data_ptimes
 #from data_view import contourf_shower, loss_curve_shower
 #from contourRd import transport, plot_results
-#from baseline_methods import 
+#from baseline_methods import compute_psi_matrices
 
 
 
@@ -409,6 +409,18 @@ results = transport(samples, nR=40, nS=25, d=2)
 plot_results_appr(samples, results)
 
 ## 3d
+
+len_train = X_train.shape[0] - 1 + X_train.shape[1]
+print(len_train)
+data_train = Xt[:len_train, :]
+df = pd.DataFrame(data_train)
+
+model_param = VAR(df)
+results_param = model_param.fit(1)
+
+A_param = np.squeeze(results_param.coefs)
+Sigma_param = results_param.sigma_u
+
 
 
 
