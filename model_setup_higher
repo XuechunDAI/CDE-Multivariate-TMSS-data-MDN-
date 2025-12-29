@@ -1,0 +1,203 @@
+# 
+
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
+
+#  定义一个RNN，输出为一个高斯混合密度模型的参数
+#  输出的前n个参数为pi_i，中间6n【2n】个为mu_i，最后21n【3n】个为Sigma_i
+#  Loss函数为负对数似然函数
+
+class GaussianMixtureModel():
+    def __init__(self, params):
+        self.pi, self.mu, self.Sigma = params
+        self.pi = self.pi.reshape(-1).numpy()
+        self.mu = self.mu.reshape(-1, 6).numpy()
+        self.Sigma = self.Sigma.reshape(-1, 6, 6).numpy()
+
+        #self.mu = self.mu.reshape(-1, 2).numpy()
+        #self.Sigma = self.Sigma.reshape(-1, 2, 2).numpy()
+
+    def sample(self, num_samples):
+        # 随机采样num_samples个样本
+        # 按照pi_i的概率选择第i个高斯分布，然后按照该高斯分布采样num_samples个样本
+        samples = []
+        for _ in range(num_samples):
+            idx = np.random.choice(len(self.pi), p=self.pi)
+            samples.append(np.random.multivariate_normal(self.mu[idx], self.Sigma[idx]))
+        return np.array(samples)
+
+    def pdf(self, x):
+        # 计算x的概率密度值
+        prob = 0
+        for i in range(len(self.pi)):
+          diff = x - self.mu[i]
+          prob += self.pi[i] * np.exp(-0.5 * diff.T @ np.linalg.inv(self.Sigma[i]) @ diff) / \
+                   ((2*np.pi)**3 * np.sqrt(np.linalg.det(self.Sigma[i]) + 1e-8))
+
+          #prob += self.pi[i] * np.exp(-0.5 * np.matmul( np.matmul((x - self.mu[i]).transpose(),
+          #                                   np.linalg.inv(self.Sigma[i])),
+          #        (x - self.mu[i]))) / ((2*np.pi)**(3/2) * np.sqrt(np.linalg.det(self.Sigma[i]) + 1e-8))
+
+        return prob
+
+    def __str__(self):
+        str = ''
+        for i in range(len(self.pi)):
+            str += 'pi_{}: {}\n'.format(i, self.pi[i])
+            str +='mu_{}: {}\n'.format(i, self.mu[i])
+            str += 'Sigma_{}:\n{}\n\n'.format(i, self.Sigma[i])
+        return str
+
+class RNN(nn.Module):
+    #def __init__(self, gause_mixture_n = 10, input_size = 2, hidden_size = 30):
+    def __init__(self, gause_mixture_n = 10, input_size = 6, hidden_size = 30):
+        super(RNN, self).__init__()
+        self.RNN = nn.RNN(input_size, hidden_size, batch_first=True)
+        self.fc1 = nn.Linear(hidden_size, 128)
+        self.fc2 = nn.Linear(128, 64)
+        self.fc3 = nn.Linear(64, gause_mixture_n * (1 + 6 + 21))
+
+        #self.fc3 = nn.Linear(64, gause_mixture_n * 6)  # n + 2n + 3n = 6n
+
+        self.relu = nn.ReLU()
+        self.softmax = nn.Softmax(dim=1)
+        self.softplus = nn.Softplus()
+        self.n = gause_mixture_n
+        self.dim = 6
+
+    def forward(self, x):
+        out, _ = self.RNN(x)
+        out = self.fc1(out)
+        out = self.relu(out)
+        out = self.fc2(out)
+        out = self.relu(out)
+        out = self.fc3(out)
+        out = out[:, -1]
+        # shape of y_pred: (batch_size, 70) -> (batch_size, 70)
+    #    print('out: ', out.shape)
+
+        #pi_pred, mu_pred, Sigma_pred = torch.split(out, [self.n, self.n*2, self.n*3], dim=1)
+        pi_pred, mu_pred, Sigma_pred = torch.split(out, [self.n, self.n*self.dim, self.n*21], dim=1)
+
+        # shape of pi_pred: (batch_size, 10) -> (batch_size, 10, 1)
+        # shape of mu_pred: (batch_size, 20) -> (batch_size, 10, 6, 1)
+        # shape of Sigma_pred: (batch_size, 30) -> (batch_size, 10, 6, 6)
+        pi_pred = self.softmax(pi_pred)
+        pi_pred = pi_pred.reshape(-1, self.n, 1)
+
+        #mu_pred = mu_pred.reshape(-1, self.n, 2).reshape(-1, self.n, 2, 1)
+        mu_pred = mu_pred.reshape(-1, self.n, 3).reshape(-1, self.n, 6, 1)
+
+
+        # 协方差矩阵
+        #Sigma_pred = Sigma_pred.reshape(-1, self.n, 3)
+        Sigma_pred = Sigma_pred.reshape(-1, self.n, 21)
+
+        #####################
+        # Cholesky分解
+        L = torch.zeros(x.size(0), self.n, self.dim, self.dim, device=x.device)
+        tril_indices = torch.tril_indices(self.dim, self.dim)
+        L[:, :, tril_indices[0], tril_indices[1]] = Sigma_pred
+
+        diag_indices = torch.arange(self.dim)
+        L[:, :, diag_indices, diag_indices] = self.softplus(L[:, :, diag_indices, diag_indices]) + 1e-2
+
+        Sigma_pred = torch.matmul(L, L.transpose(2, 3))
+        #####################
+
+        is_pos_def = torch.all(torch.det(Sigma_pred) >= -1e-8)
+        if not is_pos_def:
+            print('Sigma_pred is not positive definite')
+            print(torch.det(Sigma_pred))
+            print(torch.min(torch.det(Sigma_pred)))
+            exit(0)
+
+        return (pi_pred, mu_pred, Sigma_pred)
+
+
+    def loss_func(self, output, x_true):
+
+        pi_pred, mu_pred, Sigma_pred = output
+        # shape of x_true: (batch_size, 6) -> (batch_size, 6, 1)
+        #x_true = x_true.reshape(-1, 2, 1)
+        x_true = x_true.reshape(-1, 6, 1)
+
+        # 计算每个样本的负对数似然函数
+        prob = torch.zeros(x_true.shape[0])
+        for i in range(self.n):
+          diff = x_true - mu_pred[:, i]
+
+          # 6D 指数项
+          exponent = -0.5 * torch.matmul(
+              torch.matmul(diff.transpose(1, 2), torch.inverse(Sigma_pred[:, i])),
+              diff
+          ).reshape(-1)
+          # 6D 常数项 (2π)^{6/2}
+          denominator = (2 * np.pi) ** (self.dim / 2) * torch.sqrt(torch.det(Sigma_pred[:, i]) + 1e-8)
+          prob += pi_pred[:, i, 0] * torch.exp(exponent) / denominator
+
+
+        #判断prob里是否有nan或有inf或 有0
+        prob += 1e-6
+        if torch.isnan(prob).any() or torch.isinf(prob).any() or (prob == 0).any():
+            print('prob has nan or inf or 0')
+            print('prob:', prob)
+            print('Sigma_det:', torch.det(Sigma_pred))
+            print('minsigma_pred:', torch.min(torch.det(Sigma_pred)))
+            exit(0)
+
+
+        loss = -torch.log(prob)
+    #    print('loss:', loss)
+    #    print('loss mean:', loss.mean())
+        return loss.mean()
+
+    def predict_model(self, x):
+        # 预测模型
+        #x = torch.tensor(x, dtype=torch.float64).reshape(1, -1, 2)
+        x = torch.tensor(x, dtype=torch.float64).reshape(1, -1, 6)
+        with torch.no_grad():
+            output = self(x)
+        return GaussianMixtureModel(output)
+
+
+def train(model, x_train, y_train, x_val, y_val, lr=3e-4, batch_size=128, epochs=100):
+    optimizer = optim.Adam(model.parameters(), lr=lr)
+    # 把x_train分成batch_size大小的小batch并转为tensor(float32)
+    x_train = torch.tensor(x_train, dtype=torch.float64)
+    y_train = torch.tensor(y_train, dtype=torch.float64)
+    x_val = torch.tensor(x_val, dtype=torch.float64)
+    y_val = torch.tensor(y_val, dtype=torch.float64)
+    # 手动把数据集分成batch_size大小的小batch
+    train_loader = torch.utils.data.DataLoader(
+        torch.utils.data.TensorDataset(x_train, y_train),
+        batch_size=batch_size, shuffle=True)
+
+    train_loss_list = []
+    val_loss_list = []
+
+    for epoch in range(epochs):
+        total_loss = 0
+        for x_batch, y_batch in train_loader:
+            optimizer.zero_grad()
+            output = model(x_batch)
+            loss = model.loss_func(output, y_batch)
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item() * len(x_batch)
+        total_loss /= len(x_train)
+        val_loss = 0
+        # 验证模型
+        with torch.no_grad():
+            y_pred = model(x_val)
+            val_loss = model.loss_func(y_pred, y_val)
+        print('Epoch:', epoch, 'Loss:', total_loss, 'Val Loss:', val_loss.item())
+        train_loss_list.append(total_loss)
+        val_loss_list.append(val_loss.item())
+    return model, train_loss_list, val_loss_list
+
+
+
