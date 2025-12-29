@@ -289,7 +289,6 @@ test_y = y_val[-5]
 print(test_X.shape)
 
 set_seed(42)
-
 # Define model
 torch.set_default_dtype(torch.float64)
 model = RNN(gause_mixture_n=10)
@@ -306,6 +305,20 @@ print(gmm)
 # Plot contourf of GMM
 contourf_shower(gmm)
 
+mean_true_testX = Phi @ Xt[9994].flatten()
+Sigma_true_testX = (C @ C.T + 
+                    A @ np.outer(a[9994], a[9994]) @ A.T + 
+                    B @ Sigma[9994] @ B.T)
+
+np.random.seed(42)
+# Generate samples from GMM
+samples = gmm.sample(2000)
+
+#step 2: transport and show results
+results = transport(samples, nR=40, nS=50, d=2)
+plot_results(samples, results)
+
+## 3c
 
 
 
