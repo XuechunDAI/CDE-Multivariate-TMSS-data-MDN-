@@ -12,6 +12,7 @@ load_data_ptimes(p=6, n=10000, filename='/content/drive/MyDrive/thesis/pre-code/
 
 import numpy as np
 #from model_setup_2D import RNN, train
+#from model_setup_higher import 
 import torch
 import matplotlib.pyplot as plt
 #from load_data import data_process, load_data, load_data_ptimes
