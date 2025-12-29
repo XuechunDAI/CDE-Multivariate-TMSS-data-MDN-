@@ -310,7 +310,6 @@ plt.ylabel('Wasserstein Distance')
 plt.show()
 
 
-
 # Figure 2b, 3c
 
 # Generate data
@@ -539,7 +538,7 @@ kde_residuals = KDEMultivariate(standardized_residuals,
 
 # prepare data
 X_val_200 = np.squeeze(X_val[0:200, :, :])
-distances_200 = compute_wasserstein(X_val_200, A_param, Sigma_param, m=1000)
+distances_200 = compute_wasserstein_nonl(X_val_200, A_param, Sigma_param, m=1000)
 
 ranks = [('rank 10', 'q1'), ('rank 21', 'q2'), ('rank 33', 'q3')]
 for rank_name, rank_key in ranks:
@@ -608,6 +607,8 @@ plt.title('Distribution of W2 distances at different ranks')
 plt.ylabel('Wasserstein Distance')
 plt.show()
 
+
+# Figure 4a
 
 
 
