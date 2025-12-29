@@ -1,4 +1,4 @@
-# 
+# Model setup for 3 and 6 dimensions (first 6D, then 3D)
 
 import numpy as np
 import torch
@@ -6,9 +6,11 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 
-#  定义一个RNN，输出为一个高斯混合密度模型的参数
-#  输出的前n个参数为pi_i，中间6n【2n】个为mu_i，最后21n【3n】个为Sigma_i
-#  Loss函数为负对数似然函数
+
+# 6D:
+# Define an RNN with outputs representing the parameters of a Gaussian mixture density model.
+# The first n output parameters are pi_i, the next 6n parameters are mu_i, and the last 21n parameters are Sigma_i.
+# The loss function: negative log-likelihood function.
 
 class GaussianMixtureModel():
     def __init__(self, params):
@@ -21,8 +23,8 @@ class GaussianMixtureModel():
         #self.Sigma = self.Sigma.reshape(-1, 2, 2).numpy()
 
     def sample(self, num_samples):
-        # 随机采样num_samples个样本
-        # 按照pi_i的概率选择第i个高斯分布，然后按照该高斯分布采样num_samples个样本
+        # Randomly draw num_samples samples
+        # Select the i-th Gaussian distribution according to the probability pi_i, then sample num_samples samples from that Gaussian distribution
         samples = []
         for _ in range(num_samples):
             idx = np.random.choice(len(self.pi), p=self.pi)
@@ -30,16 +32,12 @@ class GaussianMixtureModel():
         return np.array(samples)
 
     def pdf(self, x):
-        # 计算x的概率密度值
+        # The probability density value of x
         prob = 0
         for i in range(len(self.pi)):
           diff = x - self.mu[i]
           prob += self.pi[i] * np.exp(-0.5 * diff.T @ np.linalg.inv(self.Sigma[i]) @ diff) / \
                    ((2*np.pi)**3 * np.sqrt(np.linalg.det(self.Sigma[i]) + 1e-8))
-
-          #prob += self.pi[i] * np.exp(-0.5 * np.matmul( np.matmul((x - self.mu[i]).transpose(),
-          #                                   np.linalg.inv(self.Sigma[i])),
-          #        (x - self.mu[i]))) / ((2*np.pi)**(3/2) * np.sqrt(np.linalg.det(self.Sigma[i]) + 1e-8))
 
         return prob
 
@@ -79,25 +77,17 @@ class RNN(nn.Module):
         # shape of y_pred: (batch_size, 70) -> (batch_size, 70)
     #    print('out: ', out.shape)
 
-        #pi_pred, mu_pred, Sigma_pred = torch.split(out, [self.n, self.n*2, self.n*3], dim=1)
         pi_pred, mu_pred, Sigma_pred = torch.split(out, [self.n, self.n*self.dim, self.n*21], dim=1)
 
-        # shape of pi_pred: (batch_size, 10) -> (batch_size, 10, 1)
-        # shape of mu_pred: (batch_size, 20) -> (batch_size, 10, 6, 1)
-        # shape of Sigma_pred: (batch_size, 30) -> (batch_size, 10, 6, 6)
         pi_pred = self.softmax(pi_pred)
         pi_pred = pi_pred.reshape(-1, self.n, 1)
 
-        #mu_pred = mu_pred.reshape(-1, self.n, 2).reshape(-1, self.n, 2, 1)
         mu_pred = mu_pred.reshape(-1, self.n, 3).reshape(-1, self.n, 6, 1)
 
-
-        # 协方差矩阵
-        #Sigma_pred = Sigma_pred.reshape(-1, self.n, 3)
+        # covariance matrix
         Sigma_pred = Sigma_pred.reshape(-1, self.n, 21)
 
-        #####################
-        # Cholesky分解
+        # Cholesky decomposition
         L = torch.zeros(x.size(0), self.n, self.dim, self.dim, device=x.device)
         tril_indices = torch.tril_indices(self.dim, self.dim)
         L[:, :, tril_indices[0], tril_indices[1]] = Sigma_pred
@@ -106,7 +96,6 @@ class RNN(nn.Module):
         L[:, :, diag_indices, diag_indices] = self.softplus(L[:, :, diag_indices, diag_indices]) + 1e-2
 
         Sigma_pred = torch.matmul(L, L.transpose(2, 3))
-        #####################
 
         is_pos_def = torch.all(torch.det(Sigma_pred) >= -1e-8)
         if not is_pos_def:
@@ -125,22 +114,21 @@ class RNN(nn.Module):
         #x_true = x_true.reshape(-1, 2, 1)
         x_true = x_true.reshape(-1, 6, 1)
 
-        # 计算每个样本的负对数似然函数
+        # Compute the negative log-likelihood function for each sample
         prob = torch.zeros(x_true.shape[0])
         for i in range(self.n):
           diff = x_true - mu_pred[:, i]
 
-          # 6D 指数项
+          # 6D exponent term
           exponent = -0.5 * torch.matmul(
               torch.matmul(diff.transpose(1, 2), torch.inverse(Sigma_pred[:, i])),
               diff
           ).reshape(-1)
-          # 6D 常数项 (2π)^{6/2}
+          # 6D constant term (2π)^{6/2}
           denominator = (2 * np.pi) ** (self.dim / 2) * torch.sqrt(torch.det(Sigma_pred[:, i]) + 1e-8)
           prob += pi_pred[:, i, 0] * torch.exp(exponent) / denominator
 
-
-        #判断prob里是否有nan或有inf或 有0
+        # Check whether 'prob' contains NaN, infinity, or zero
         prob += 1e-6
         if torch.isnan(prob).any() or torch.isinf(prob).any() or (prob == 0).any():
             print('prob has nan or inf or 0')
@@ -149,14 +137,13 @@ class RNN(nn.Module):
             print('minsigma_pred:', torch.min(torch.det(Sigma_pred)))
             exit(0)
 
-
         loss = -torch.log(prob)
     #    print('loss:', loss)
     #    print('loss mean:', loss.mean())
         return loss.mean()
 
     def predict_model(self, x):
-        # 预测模型
+        # Predictive Model
         #x = torch.tensor(x, dtype=torch.float64).reshape(1, -1, 2)
         x = torch.tensor(x, dtype=torch.float64).reshape(1, -1, 6)
         with torch.no_grad():
@@ -166,12 +153,12 @@ class RNN(nn.Module):
 
 def train(model, x_train, y_train, x_val, y_val, lr=3e-4, batch_size=128, epochs=100):
     optimizer = optim.Adam(model.parameters(), lr=lr)
-    # 把x_train分成batch_size大小的小batch并转为tensor(float32)
+    # Divide x_train into small batches of size batch_size and convert them to tensors (float32)
     x_train = torch.tensor(x_train, dtype=torch.float64)
     y_train = torch.tensor(y_train, dtype=torch.float64)
     x_val = torch.tensor(x_val, dtype=torch.float64)
     y_val = torch.tensor(y_val, dtype=torch.float64)
-    # 手动把数据集分成batch_size大小的小batch
+    # Manually divide the dataset into small batches of batch_size
     train_loader = torch.utils.data.DataLoader(
         torch.utils.data.TensorDataset(x_train, y_train),
         batch_size=batch_size, shuffle=True)
@@ -190,7 +177,7 @@ def train(model, x_train, y_train, x_val, y_val, lr=3e-4, batch_size=128, epochs
             total_loss += loss.item() * len(x_batch)
         total_loss /= len(x_train)
         val_loss = 0
-        # 验证模型
+        # Validate the model 
         with torch.no_grad():
             y_pred = model(x_val)
             val_loss = model.loss_func(y_pred, y_val)
@@ -198,6 +185,10 @@ def train(model, x_train, y_train, x_val, y_val, lr=3e-4, batch_size=128, epochs
         train_loss_list.append(total_loss)
         val_loss_list.append(val_loss.item())
     return model, train_loss_list, val_loss_list
+
+
+
+
 
 
 
