@@ -7,6 +7,20 @@ from scipy.stats import multivariate_t
 from scipy.stats import multivariate_normal
 
 
+
+# sliding windows
+def data_process(Xt, p = 10, r = 0.2):
+    print(Xt.shape)
+    X = np.stack([Xt[i: i+p] for i in range(Xt.shape[0]-p)], axis=0)
+    y = Xt[p:]
+    N = X.shape[0]
+    X_train = X[:int(N*(1-r))]
+    y_train = y[:int(N*(1-r))]
+    X_val = X[int(N*(1-r)):]
+    y_val = y[int(N*(1-r)):]
+    return X_train, y_train, X_val, y_val
+
+
 # VAR(1)
 def load_data(filename = None, n = 1000):
     if filename is not None:
@@ -355,6 +369,45 @@ def load_data_nonlinear(n=1000, seed=0):
         "err": err.T}
 
 
+# 6D
+
+# VAR(1)
+def load_data(filename = None, n = 1000):
+    if filename is not None:
+        Xt = np.load(filename)
+    else:
+        k = 6
+        A = np.array([
+            [0.2, -0.6, 0.1, 0.05, -0.1, 0.02],
+            [0.3, 1.1, -0.2, 0.1, -0.05, 0.01],
+            [0.1, 0.2, 0.8, -0.1, 0.05, -0.02],
+            [0.05, -0.1, 0.1, 0.7, 0.1, -0.05],
+            [-0.1, 0.05, 0.05, 0.1, 0.9, 0.03],
+            [0.02, 0.01, -0.02, -0.05, 0.03, 0.85]
+        ])
+
+        D = -A.T
+        nn = 500  
+        N = n + nn
+
+        cov = np.array([
+                [1.0, 0.3, 0.2, 0.1, 0.05, 0.02],
+                [0.3, 1.0, 0.1, 0.15, 0.08, 0.03],
+                [0.2, 0.1, 1.0, 0.12, 0.06, 0.04],
+                [0.1, 0.15, 0.12, 1.0, 0.2, 0.1],
+                [0.05, 0.08, 0.06, 0.2, 1.0, 0.15],
+                [0.02, 0.03, 0.04, 0.1, 0.15, 1.0]
+        ])
+        err = np.random.multivariate_normal(mean=np.zeros(k), cov=cov, size=N)
+
+        XXt = np.zeros((k, N))
+        for i in range(10, N):
+            #XXt[:, i] = A @ (0.6*XXt[:, i-1] + 0.4 * XXt[:, i-5]) + err[i, :]
+            XXt[:, i] = A @ XXt[:, i-1] + err[i, :]
+
+        Xt = XXt[:, nn:N]
+
+        return Xt.T
 
 
 
@@ -363,15 +416,6 @@ def load_data_nonlinear(n=1000, seed=0):
 
 
 
-# sliding windows
-def data_process(Xt, p = 10, r = 0.2):
-    print(Xt.shape)
-    X = np.stack([Xt[i: i+p] for i in range(Xt.shape[0]-p)], axis=0)
-    y = Xt[p:]
-    N = X.shape[0]
-    X_train = X[:int(N*(1-r))]
-    y_train = y[:int(N*(1-r))]
-    X_val = X[int(N*(1-r)):]
-    y_val = y[int(N*(1-r)):]
-    return X_train, y_train, X_val, y_val
+
+
 
