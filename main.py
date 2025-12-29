@@ -557,6 +557,61 @@ plt.show()
 
 # Figure 3a
 
+# Generate data
+Xt = load_data(n = 10000)
+X_train, y_train, X_val, y_val = data_process(Xt, p = 1, r = 0.2)
+print(Xt.shape)
+print(X_train.shape, y_train.shape, X_val.shape, y_val.shape)
+
+test_X = X_val[-5]
+test_y = y_val[-5]
+
+set_seed(42)
+# Define model
+torch.set_default_dtype(torch.float64)
+model = RNN(gause_mixture_n=10)
+
+# Train model
+model, tl, vl = train(model, X_train, y_train, X_val, y_val, lr=3e-4, batch_size=128, epochs=10)
+loss_curve_shower(tl, vl)
+
+# parametric estimation
+data_train = X_train.reshape(X_train.shape[0], X_train.shape[2])
+df = pd.DataFrame(data_train)
+model_param = VAR(df)
+results_param = model_param.fit(1)
+
+A_param = np.squeeze(results_param.coefs)
+Sigma_param = results_param.sigma_u
+
+# KDE
+standardized_residuals = calculate_residuals(data_train, A_param, Sigma_param)
+kde_residuals = KDEMultivariate(standardized_residuals,
+                               bw='normal_reference',
+                               var_type='cc')
+
+# prepare data
+A = np.array([[0.2, -0.6], [0.3, 1.1]])
+Sigma = np.array([[1.0, 0.3], [0.3, 1]])
+X_val_200 = np.squeeze(X_val[0:200, :, :])
+distances_200 = compute_wasserstein(X_val_200, A, Sigma, A_param, Sigma_param, m=1000)
+
+ranks = [('rank 10', 'q1'), ('rank 21', 'q2'), ('rank 33', 'q3')]
+for rank_name, rank_key in ranks:
+    plot_WD2(distances_200, rank_name, rank_key)
+
+mdn_data = [distances_200['mdn'][key] for key in ['q1', 'q2', 'q3']]
+plt.figure()
+plt.boxplot(mdn_data)
+plt.xticks([1, 2, 3], ['rank10', 'rank21', 'rank33'])
+plt.title('Distribution of W2 distances at different ranks')
+plt.ylabel('Wasserstein Distance')
+plt.show()
+
+
+
+
+
 
 
 
