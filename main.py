@@ -266,7 +266,7 @@ samples = gmm.sample(2000)
 
 #step 2: transport and show results
 results = transport(samples, nR=40, nS=50, d=2)
-plot_results(samples, results)
+plot_results_admean(samples, results)
 
 ## 3b
 
@@ -274,8 +274,37 @@ plot_results(samples, results)
 
 # Figure 2b, 3c
 
+# Generate data
+data_dict = load_vol_VAR(p = 1, n = 10000)
+Xt = data_dict["Xt"]
+a = data_dict["a"]
+Sigma = data_dict["Sigma"]
 
+X_train, y_train, X_val, y_val = data_process(Xt, p = 1, r = 0.2)
+print(Xt.shape, a.shape, Sigma.shape)
+print(X_train.shape, y_train.shape, X_val.shape, y_val.shape)
 
+test_X = X_val[-5]
+test_y = y_val[-5]
+print(test_X.shape)
+
+set_seed(42)
+
+# Define model
+torch.set_default_dtype(torch.float64)
+model = RNN(gause_mixture_n=10)
+
+# Train model
+model, tl, vl = train(model, X_train, y_train, X_val, y_val, lr=3e-4, batch_size=128, epochs=10)
+loss_curve_shower(tl, vl)
+
+# get Gaussian mixture model from test_x
+gmm = model.predict_model(test_X)
+
+print(gmm)
+
+# Plot contourf of GMM
+contourf_shower(gmm)
 
 
 
