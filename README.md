@@ -2,8 +2,6 @@
 
 ## Title: Novel developments of Mixture Density Networks: A supervised approach for learning multivariate time series
 
-## Abstract: 
-
 ## Methodology: 
 
 We use a Mixture Density Network (MDN), with a recurrent neural network to perform conditional density estimation for multivariate time series. Specifically, it maps past observations to the parameters of a Gaussian mixture model as a approximation of the true density. 
@@ -22,10 +20,22 @@ We assess the model through
 ```bash
 pip install -r requirements.txt
 
-
 ```markdown
 - Data generation: `experiments/data_generation.py`
 - Model training: `experiments/train_mdn.py`
 - Evaluation: `evaluation/compute_wd.py`
+
+
+(All datasets used in the thesis are simulated.) 
+To generate the datasets, run:
+```bash
+python experiments/data_generation.py
+
+To reproduce the main results of the thesis with default settings, run:
+```bash
+python main.py
+
+
+
 
 
