@@ -22,13 +22,13 @@ pip install -r requirements.txt
 
 ### Code Structure
 The main scripts are organized as follows:
-- Data generation: `load_data/`
+- Data generation: `load_data`
 - MDN Model:
-  - `model_setup_2D/`
-  - `model_setup_higher/` 
-- Parametric Models and KDE: `baseline_methods/`
-- Computation of center-outward quantiles: `contourRd/`
-- Visualization: `data_view/` 
+  - `model_setup_2D`
+  - `model_setup_higher` 
+- Parametric Models and KDE: `baseline_methods`
+- Computation of center-outward quantiles: `contourRd`
+- Visualization: `data_view` 
 
 ### Data Generation 
 All datasets used in the thesis are simulated. To generate the datasets, run:
