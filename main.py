@@ -270,7 +270,7 @@ samples = gmm.sample(2000)
 results = transport(samples, nR=40, nS=50, d=2)
 plot_results_admean(samples, results)
 
-## Figure 3b
+## Figure 3b, 8b and 9b
 
 len_train = X_train.shape[0] - 1 + X_train.shape[1]
 data_train = Xt[:len_train, :]
@@ -357,7 +357,7 @@ samples = gmm.sample(2000)
 results = transport(samples, nR=40, nS=50, d=2)
 plot_results(samples, results)
 
-## 3c
+## 3c, 8c and 9c
 
 data = np.squeeze(X_train)
 data_Sigma = Sigma[0:len(X_train)]
@@ -518,7 +518,7 @@ samples = gmm.sample(1000)
 results = transport(samples, nR=40, nS=25, d=2)
 plot_results_appr(samples, results)
 
-## Figure 3d
+## Figure 3d, 8d and 9d
 
 len_train = X_train.shape[0] - 1 + X_train.shape[1]
 print(len_train)
@@ -555,7 +555,7 @@ plt.show()
 
 
 
-# Figure 3a
+# Figure 3a, 8a and 9a
 
 # Generate data
 Xt = load_data(n = 10000)
@@ -609,7 +609,10 @@ plt.ylabel('Wasserstein Distance')
 plt.show()
 
 
-# Figure 4a
+
+# Figure 4a, 13a and 14a 
+
+
 
 
 
