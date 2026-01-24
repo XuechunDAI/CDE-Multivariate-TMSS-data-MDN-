@@ -13,7 +13,15 @@ Model performance is assessed through:
 ## How to Run: 
 
 ### Environment
-- PyTorch >= 1.13
+- PyTorch >= 1.13 
+- NumPy
+- Pandas
+- SciPy
+- matplotlib 
+- OT (Optimal Transport)
+
+Some baseline methods rely on R and are called from Python. In these cases, a working R installation and the corresponding R packages
+are required. 
 
 ### Install Dependencies
 ```bash
