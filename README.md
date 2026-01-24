@@ -16,20 +16,19 @@ We assess the model through
 - PyTorch >= 1.13
 
 ### Install Dependencies
-
 ```bash
 pip install -r requirements.txt
 
 ```markdown
-- Data generation: `experiments/data_generation.py`
-- Model training: `experiments/train_mdn.py`
-- Evaluation: `evaluation/compute_wd.py`
+- Data generation: `load_data.py`
+- Model: `model_setup_2D.py` and `model_setup_higher.py` 
+- Parametric Models & KDE: `baseline_methods.py`
+- Visualization: `data_view.py` 
 
 
-(All datasets used in the thesis are simulated.) 
-To generate the datasets, run:
+All datasets used in the thesis are simulated. To generate the datasets, run:
 ```bash
-python experiments/data_generation.py
+python load_data.py
 
 To reproduce the main results of the thesis with default settings, run:
 ```bash
