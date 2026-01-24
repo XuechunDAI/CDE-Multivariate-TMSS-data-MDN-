@@ -18,6 +18,7 @@ Model performance is assessed through:
 ### Install Dependencies
 ```bash
 pip install -r requirements.txt
+```
 
 ### Code Structure
 The main scripts are organized as follows:
@@ -32,10 +33,13 @@ The main scripts are organized as follows:
 All datasets used in the thesis are simulated. To generate the datasets, run:
 ```bash
 python load_data.py
+```
 
 To reproduce the main results of the thesis with default settings, run:
 ```bash
 python main.py
+```
+
 
 
 
