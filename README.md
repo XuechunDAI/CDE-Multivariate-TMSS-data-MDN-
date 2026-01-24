@@ -4,11 +4,11 @@
 
 ## Methodology: 
 
-We use a Mixture Density Network (MDN), with a recurrent neural network to perform conditional density estimation for multivariate time series. Specifically, it maps past observations to the parameters of a Gaussian mixture model as a approximation of the true density. 
+We use a Mixture Density Network (MDN), with a recurrent neural network to perform conditional density estimation for multivariate time series. Specifically, it maps past observations to the parameters of a Gaussian mixture model which serves as an approximation of the true density. 
 
-We assess the model through 
-- `Center-outward quantile contour plots` in two dimensional cases; 
-- `Wasserstein distance` as a quantitative metric in higher dimensions. Evaluation are conducted between the proposed model and two baseline estimation method parametric estimation and Kernel density estimation. 
+Model performance is assessed through: 
+- Center-outward quantile contour plots in two dimensional cases; 
+- Wasserstein distance as a quantitative metric in higher dimensions. The proposed model is compared with two baseline estimation method parametric estimation and Kernel density estimation. 
 
 ## How to Run: 
 
@@ -19,13 +19,16 @@ We assess the model through
 ```bash
 pip install -r requirements.txt
 
-```markdown
-- Data generation: `load_data.py`
-- Model: `model_setup_2D.py` and `model_setup_higher.py` 
-- Parametric Models & KDE: `baseline_methods.py`
-- Visualization: `data_view.py` 
+### Code Structure
+The main scripts are organized as follows:
+- Data generation: `load_data`
+- MDN Model:
+  - `model_setup_2D`
+  - `model_setup_higher` 
+- Parametric Models and KDE: `baseline_methods`
+- Visualization: `data_view` 
 
-
+### Data Generation 
 All datasets used in the thesis are simulated. To generate the datasets, run:
 ```bash
 python load_data.py
@@ -33,6 +36,8 @@ python load_data.py
 To reproduce the main results of the thesis with default settings, run:
 ```bash
 python main.py
+
+
 
 
 
