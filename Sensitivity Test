@@ -1,0 +1,363 @@
+# MDN
+# K - component of mdn
+
+def eval_k_wd(gmm_model, x_grid, A, Sigma, A_param, Sigma_param, m=200, random_state=42):
+
+    np.random.seed(random_state)
+    #rng = np.random.default_rng(random_state)
+    distances = {
+        'mdn': {'q1': [], 'q2': [], 'q3': []}}
+
+    for x0 in x_grid:
+
+        # P0
+        mean_true = np.squeeze(A @ x0.T)
+        cov_true = Sigma
+        Y_true = np.random.multivariate_normal(mean_true, cov_true, size=m)
+
+        # mdn P3
+        gmm = gmm_model.predict_model(x0)
+        Y_mdn = gmm.sample(m)
+
+        # transport the samples
+        Y_true_results = transport(Y_true, nR=40, nS=25, d=2, verbose=False)
+        Y_mdn_results = transport(Y_mdn, nR=40, nS=25, d=2, verbose=False)
+
+        # rank point
+        Y_true_q1 = Y_true_results['q1_points']
+        Y_mdn_q1 = Y_mdn_results['q1_points']
+
+        Y_true_q2 = Y_true_results['q2_points']
+        Y_mdn_q2 = Y_mdn_results['q2_points']
+
+        Y_true_q3 = Y_true_results['q3_points']
+        Y_mdn_q3 = Y_mdn_results['q3_points']
+
+        # Wasserstein-2
+        m_adj = len(Y_true_q1) 
+
+        a = np.ones(m_adj) / m_adj
+        b = np.ones(m_adj) / m_adj
+
+        # ==================== q1 ====================
+        M_mdn_q1 = ot.dist(Y_true_q1, Y_mdn_q1, metric='euclidean')**2
+        W2_sq_mdn_q1 = ot.emd2(a, b, M_mdn_q1)
+        distances['mdn']['q1'].append(np.sqrt(W2_sq_mdn_q1))
+
+        # ==================== q2 ====================
+        M_mdn_q2 = ot.dist(Y_true_q2, Y_mdn_q2, metric='euclidean')**2
+        W2_sq_mdn_q2 = ot.emd2(a, b, M_mdn_q2)
+        distances['mdn']['q2'].append(np.sqrt(W2_sq_mdn_q2))
+
+        # ==================== q3 ====================
+        M_mdn_q3 = ot.dist(Y_true_q3, Y_mdn_q3, metric='euclidean')**2
+        W2_sq_mdn_q3 = ot.emd2(a, b, M_mdn_q3)
+        distances['mdn']['q3'].append(np.sqrt(W2_sq_mdn_q3))
+
+    for method in distances:
+      for quantile in distances[method]:
+        distances[method][quantile] = np.array(distances[method][quantile])
+
+    return distances
+
+
+def evaluate_k_sensitivity(X_train, y_train, X_val, y_val,
+                          A, Sigma, A_param, Sigma_param,
+                          k_values=[5, 10, 15, 20, 30],
+                          n_test_points=10,
+                          n_samples=1000,
+                          random_state=42):
+
+
+    # extract 10 points from validation set
+    np.random.seed(random_state)
+    n_val = len(X_val)
+    test_indices = np.random.choice(n_val, size=n_test_points, replace=False)
+
+    #x_grid
+    x_grid = [X_val[idx] for idx in test_indices]
+    results = {
+        'k_values': k_values,
+        'means': {'q1': [], 'q2': [], 'q3': []},
+        'stds': {'q1': [], 'q2': [], 'q3': []},
+        'all_distances': {}
+    }
+
+    for k in k_values:
+        print(f"\n{'='*50}")
+        print(f"Testing K={k}...")
+        print(f"{'='*50}")
+
+        # model training
+        torch.set_default_dtype(torch.float64)
+        model = RNN(gause_mixture_n=k)
+        model, tl, vl = train(model, X_train, y_train, X_val, y_val, lr=3e-4, batch_size=128, epochs=10)
+
+        # WD
+        distances = eval_k_wd(
+            gmm_model=model,  
+            x_grid=x_grid,
+            A=A,
+            Sigma=Sigma,
+            A_param=A_param,
+            Sigma_param=Sigma_param,
+            m=n_samples,
+            random_state=random_state
+        )
+
+        # save distances
+        results['all_distances'][k] = distances['mdn']
+
+        # cumpute mean & standard error for each quantile
+        for quantile in ['q1', 'q2', 'q3']:
+            wd_list = distances['mdn'][quantile]
+            mean_wd = np.mean(wd_list)
+            std_wd = np.std(wd_list)
+
+            results['means'][quantile].append(mean_wd)
+            results['stds'][quantile].append(std_wd)
+
+            print(f"  {quantile}: Mean WD={mean_wd:.4f}, Std WD={std_wd:.4f}")
+
+    return results
+
+
+def plot_sensitivity_combined(results, save_path='k_sensitivity_combined.png',
+                              figsize=(10, 6)):
+
+    plt.figure(figsize=figsize)
+
+    k_values = results['k_values']
+    quantiles = ['q1', 'q2', 'q3']
+    labels = ['Q1 (rank 10)', 'Q2 (rank 21)', 'Q3 (rank 33)']
+    colors = ['C0', 'C1', 'C2']
+
+    for quantile, label, color in zip(quantiles, labels, colors):
+        means = results['means'][quantile]
+        stds = results['stds'][quantile]
+
+        plt.errorbar(k_values, means, yerr=stds, marker='o', markersize=8,
+                    capsize=5, capthick=2, linewidth=2, label=label,
+                    color=color, alpha=0.8)
+
+    plt.xlabel('Number of Mixture Components (K)', fontsize=12)
+    plt.ylabel('Wasserstein Distance', fontsize=12)
+    plt.title('Sensitivity to Number of Mixture Components of MDN', fontsize=14)
+    plt.grid(True, alpha=0.3)
+    plt.legend(fontsize=11)
+    plt.xticks(k_values)
+
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.show()
+
+    print(f"Figure saved as: {save_path}")
+
+
+
+# KDE
+# bandwidth
+
+# adjust the sampling function
+def sample_kde(kde_residuals, x_test, A_param, Sigma_param, n_samples=1):
+
+    conditional_mean = A_param @ x_test.T
+    conditional_mean = conditional_mean.reshape(1, -1) # 调整维度
+    conditional_cov = Sigma_param
+
+    # sample from the standardizedresiduals
+    standardized_residuals = kde_residuals.data
+    n_residuals = len(standardized_residuals)
+
+    random_indices = np.random.randint(0, n_residuals, size=n_samples)
+    standardized_samples = standardized_residuals[random_indices] + \
+                          kde_residuals.bw * np.random.randn(n_samples, 2)
+
+    L = np.linalg.cholesky(conditional_cov)
+    samples = conditional_mean + standardized_samples @ L.T
+
+    return samples
+
+
+def eval_kde_wd(kde_residuals, x_grid, A, Sigma, A_param, Sigma_param, m=200, random_state=42):
+
+    np.random.seed(random_state)
+    distances = {'kde': {'q1': [], 'q2': [], 'q3': []}}
+
+    for x0 in x_grid:
+        # P0
+        mean_true = np.squeeze(A @ x0.T)
+        cov_true = Sigma
+        Y_true = np.random.multivariate_normal(mean_true, cov_true, size=m)
+
+        # KDE sampling
+        Y_kde = sample_kde(kde_residuals, x0, A_param, Sigma_param, m)
+
+        # transport the samples
+        Y_true_results = transport(Y_true, nR=40, nS=25, d=2, verbose=False)
+        Y_kde_results = transport(Y_kde, nR=40, nS=25, d=2, verbose=False)
+
+        # rank point
+        Y_true_q1 = Y_true_results['q1_points']
+        Y_kde_q1 = Y_kde_results['q1_points']
+
+        Y_true_q2 = Y_true_results['q2_points']
+        Y_kde_q2 = Y_kde_results['q2_points']
+
+        Y_true_q3 = Y_true_results['q3_points']
+        Y_kde_q3 = Y_kde_results['q3_points']
+
+        # Wasserstein-2
+        m_adj = len(Y_true_q1)
+
+        a = np.ones(m_adj) / m_adj
+        b = np.ones(m_adj) / m_adj
+
+        # ==================== q1 ====================
+        M_kde_q1 = ot.dist(Y_true_q1, Y_kde_q1, metric='euclidean')**2
+        W2_sq_kde_q1 = ot.emd2(a, b, M_kde_q1)
+        distances['kde']['q1'].append(np.sqrt(W2_sq_kde_q1))
+
+        # ==================== q2 ====================
+        M_kde_q2 = ot.dist(Y_true_q2, Y_kde_q2, metric='euclidean')**2
+        W2_sq_kde_q2 = ot.emd2(a, b, M_kde_q2)
+        distances['kde']['q2'].append(np.sqrt(W2_sq_kde_q2))
+
+        # ==================== q3 ====================
+        M_kde_q3 = ot.dist(Y_true_q3, Y_kde_q3, metric='euclidean')**2
+        W2_sq_kde_q3 = ot.emd2(a, b, M_kde_q3)
+        distances['kde']['q3'].append(np.sqrt(W2_sq_kde_q3))
+
+    for method in distances:
+        for quantile in distances[method]:
+            distances[method][quantile] = np.array(distances[method][quantile])
+
+    return distances
+
+from statsmodels.nonparametric.kernel_density import KDEMultivariate
+
+
+def evaluate_bandwidth_sensitivity(data_train, A_param, Sigma_param,
+                                       X_val, A, Sigma,
+                                       bandwidth_multipliers=[0.5, 1.0, 2.0, 4.0, 8.0],
+                                       n_test_points=20,
+                                       n_samples=1000,
+                                       random_state=42):
+
+    # extract 10 points from validation set
+    np.random.seed(random_state)
+    n_val = len(X_val)
+    test_indices = np.random.choice(n_val, size=n_test_points, replace=False)
+
+    # x_grid
+    x_grid = [X_val[idx] for idx in test_indices]
+
+    # standardized residuals
+    standardized_residuals = calculate_residuals(data_train, A_param, Sigma_param)
+
+    # reference bandwidth h0
+    print("compute the bandwidth (h0) using 'normal_reference'")
+    kde_reference = KDEMultivariate(standardized_residuals,
+                                    bw='normal_reference',
+                                    var_type='cc')
+    h0 = kde_reference.bw 
+    print(f"bandwidth h0 = {h0}")
+
+    results = {
+        'bandwidth_multipliers': bandwidth_multipliers,
+        'h0': h0,
+        'bandwidth_values': [],  # real bandwidth
+        'means': {'q1': [], 'q2': [], 'q3': []},
+        'stds': {'q1': [], 'q2': [], 'q3': []},
+        'all_distances': {}
+    }
+
+    for multiplier in bandwidth_multipliers:
+        print(f"\n{'='*50}")
+        print(f"Testing Bandwidth = {multiplier} * h0 = {multiplier} * {h0}")
+        print(f"{'='*50}")
+
+        if isinstance(h0, (list, np.ndarray)):
+            bw_actual = [multiplier * bw for bw in h0]
+        else:
+            bw_actual = multiplier * h0
+
+        results['bandwidth_values'].append(bw_actual)
+
+        # specific bandwidth for KDE
+        kde_residuals = KDEMultivariate(standardized_residuals,
+                                        bw=bw_actual,
+                                        var_type='cc')
+
+        # WD
+        distances = eval_kde_wd(
+            kde_residuals=kde_residuals,
+            x_grid=x_grid,
+            A=A,
+            Sigma=Sigma,
+            A_param=A_param,
+            Sigma_param=Sigma_param,
+            m=n_samples,
+            random_state=random_state
+        )
+
+        results['all_distances'][multiplier] = distances['kde']
+
+        # cumpute mean & standard error for each quantile
+        for quantile in ['q1', 'q2', 'q3']:
+            wd_list = distances['kde'][quantile]
+            mean_wd = np.mean(wd_list)
+            std_wd = np.std(wd_list)
+
+            results['means'][quantile].append(mean_wd)
+            results['stds'][quantile].append(std_wd)
+
+            print(f"  {quantile}: Mean WD={mean_wd:.4f}, Std WD={std_wd:.4f}")
+
+    return results
+
+
+def plot_kde_sensitivity_combined(results, save_path='kde_bandwidth_sensitivity_combined.png',
+                                  figsize=(10, 6)):
+
+    plt.figure(figsize=figsize)
+
+    bandwidth_multipliers = results['bandwidth_multipliers']
+    quantiles = ['q1', 'q2', 'q3']
+    labels = ['Q1 (rank 10)', 'Q2 (rank 21)', 'Q3 (rank 33)']
+    colors = ['C0', 'C1', 'C2']
+
+    for quantile, label, color in zip(quantiles, labels, colors):
+        means = results['means'][quantile]
+        stds = results['stds'][quantile]
+
+        plt.errorbar(bandwidth_multipliers, means, yerr=stds, marker='o', markersize=8,
+                    capsize=5, capthick=2, linewidth=2, label=label,
+                    color=color, alpha=0.8)
+
+    # add reference line at h0 
+    plt.axvline(x=1.0, color='red', linestyle='--', alpha=0.5, label='h0 (reference)')
+
+    plt.xlabel('Bandwidth Multiplier (× h0)', fontsize=12)
+    plt.ylabel('Wasserstein Distance', fontsize=12)
+    plt.title('Sensitivity to Bandwidth of KDE', fontsize=14)
+    plt.grid(True, alpha=0.3)
+    plt.legend(fontsize=11, loc='upper left')
+
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.show()
+
+    print(f"Figure saved as: {save_path}")
+
+
+
+
+
+
+
+
+
+
+
+
