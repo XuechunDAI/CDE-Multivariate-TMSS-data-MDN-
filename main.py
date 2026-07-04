@@ -608,7 +608,7 @@ plt.ylabel('Wasserstein Distance')
 plt.show()
 
 
-# Figure 6a 
+# Figure 6a (Sensitivity Test)
 
 results_kde = evaluate_bandwidth_sensitivity(
     data_train=data_train,
