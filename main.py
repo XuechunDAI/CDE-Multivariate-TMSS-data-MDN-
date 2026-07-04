@@ -554,7 +554,6 @@ plt.ylabel('Wasserstein Distance')
 plt.show()
 
 
-
 # Figure 3a, 8a and 9a
 
 # Generate data
@@ -609,8 +608,522 @@ plt.ylabel('Wasserstein Distance')
 plt.show()
 
 
+# Figure 6a 
+
+results_kde = evaluate_bandwidth_sensitivity(
+    data_train=data_train,
+    A_param=A_param,
+    Sigma_param=Sigma_param,
+    X_val=X_val,
+    A=A,
+    Sigma=Sigma,
+    bandwidth_multipliers=[0.5, 1.0, 2.0, 4.0, 8.0],  # times to $h0$
+    n_test_points=30,
+    n_samples=1000,
+    random_state=42
+)
+
+plot_kde_sensitivity_combined(results_kde,
+                              save_path='kde_bandwidth_sensitivity_combined.png')
+
+# Figure 6b 
+
+results = evaluate_k_sensitivity(
+    X_train=X_train,
+    y_train=y_train,
+    X_val=X_val,
+    y_val=y_val,
+    A=A,
+    Sigma=Sigma,
+    A_param=A_param,
+    Sigma_param=Sigma_param,
+    k_values=[5, 10, 15, 20, 30],
+    n_test_points=30,
+    n_samples=1000,
+    random_state=42
+)
+
+plot_sensitivity_combined(results, save_path='k_sensitivity_combined.png')
+
 
 # Figure 4a, 13a and 14a 
+
+# Generate data
+Xt = load_data(n = 10000)
+X_train, y_train, X_val, y_val = data_process(Xt, p = 1, r = 0.2)
+print(Xt.shape)
+print(X_train.shape, y_train.shape, X_val.shape, y_val.shape)
+
+test_X = X_val[-5]
+test_y = y_val[-5]
+
+set_seed(42)
+# Define model
+torch.set_default_dtype(torch.float64)
+model = RNN(gause_mixture_n=10)
+
+# Train model
+model, tl, vl = train(model, X_train, y_train, X_val, y_val, lr=3e-4, batch_size=128, epochs=10)
+loss_curve_shower(tl, vl)
+
+# parametric estimation
+data_train = X_train.reshape(X_train.shape[0], X_train.shape[2])
+df = pd.DataFrame(data_train)
+model_param = VAR(df)
+results_param = model_param.fit(1)
+
+A_param = np.squeeze(results_param.coefs)
+Sigma_param = results_param.sigma_u
+
+# KDE
+standardized_residuals = calculate_residuals(data_train, A_param, Sigma_param)
+kde_residuals = KDEMultivariate(standardized_residuals,
+                               bw='normal_reference',
+                               var_type='cccccc')
+
+# prepare data
+A = np.array([
+            [0.2, -0.6, 0.1, 0.05, -0.1, 0.02],
+            [0.3, 1.1, -0.2, 0.1, -0.05, 0.01],
+            [0.1, 0.2, 0.8, -0.1, 0.05, -0.02],
+            [0.05, -0.1, 0.1, 0.7, 0.1, -0.05],
+            [-0.1, 0.05, 0.05, 0.1, 0.9, 0.03],
+            [0.02, 0.01, -0.02, -0.05, 0.03, 0.85]
+        ])
+cov = np.array([
+                [1.0, 0.3, 0.2, 0.1, 0.05, 0.02],
+                [0.3, 1.0, 0.1, 0.15, 0.08, 0.03],
+                [0.2, 0.1, 1.0, 0.12, 0.06, 0.04],
+                [0.1, 0.15, 0.12, 1.0, 0.2, 0.1],
+                [0.05, 0.08, 0.06, 0.2, 1.0, 0.15],
+                [0.02, 0.03, 0.04, 0.1, 0.15, 1.0]
+        ])
+X_val_200 = np.squeeze(X_val[0:200, :, :])
+## Sigma = cov
+distances_200 = compute_wasserstein(X_val_200, A, Sigma, A_param, Sigma_param, m=1000)
+
+ranks = [('rank 10', 'q1'), ('rank 21', 'q2'), ('rank 33', 'q3')]
+for rank_name, rank_key in ranks:
+    plot_WD2(distances_200, rank_name, rank_key)
+
+mdn_data = [distances_200['mdn'][key] for key in ['q1', 'q2', 'q3']]
+plt.figure()
+plt.boxplot(mdn_data)
+plt.xticks([1, 2, 3], ['rank10', 'rank21', 'rank33'])
+plt.title('Distribution of W2 distances at different ranks')
+plt.ylabel('Wasserstein Distance')
+plt.show()
+
+
+# Figure 4b, 13b and 14b 
+
+len_train = X_train.shape[0] - 1 + X_train.shape[1]
+data_train = Xt[:len_train, :]
+df = pd.DataFrame({
+    'dim1': data_train[:, 0],
+    'dim2': data_train[:, 1],
+    'dim3': data_train[:, 2],
+    'dim4': data_train[:, 3],
+    'dim5': data_train[:, 4],
+    'dim6': data_train[:, 5]
+})
+
+model_varma = VARMAX(df, order=(1, 1))
+results_varma = model_varma.fit(disp=True)
+
+k_vars = 6
+mu_param = np.zeros(k_vars)
+ar_coefs = np.zeros((k_vars, k_vars))
+ma_coefs = np.zeros((k_vars, k_vars))
+L = np.zeros((k_vars, k_vars))
+
+param_dict = results_varma.params.to_dict()
+# intercept
+for i in range(1, k_vars + 1):
+    key = f"intercept.dim{i}"
+    if key in param_dict:
+        mu_param[i-1] = param_dict[key]
+# AR coefficient matrix (3x3)
+for i in range(1, k_vars + 1):
+    for j in range(1, k_vars + 1):
+        key = f"L1.dim{i}.dim{j}"
+        if key in param_dict:
+            ar_coefs[j-1, i-1] = param_dict[key]
+# MA coefficient matrix (3x3)
+for i in range(1, k_vars + 1):
+    for j in range(1, k_vars + 1):
+        key = f"L1.e(dim{i}).dim{j}"
+        if key in param_dict:
+            ma_coefs[j-1, i-1] = param_dict[key]
+# Cholesky matrix
+for i in range(1, k_vars + 1):
+    L[i-1, i-1] = param_dict.get(f"sqrt.var.dim{i}", 0)
+    for j in range(1, i):
+        L[i-1, j-1] = param_dict.get(f"sqrt.cov.dim{j}.dim{i}", 0)
+Sigma_param = L @ L.T
+
+# KDE
+standardized_residuals = calculate_residuals_varma(X_train, Psi_list, Sigma_param)
+kde_residuals = KDEMultivariate(standardized_residuals,
+                               bw='normal_reference',
+                               var_type='cccccc')
+
+# prepare data
+X_val_200 = X_val[0:200, :, :]
+distances_200 = compute_wasserstein_varma(X_val_200, Phi, Theta, Sigma, mu_param, ar_coefs, ma_coefs, Sigma_param, m=1000)
+
+ranks = [('rank 10', 'q1'), ('rank 21', 'q2'), ('rank 33', 'q3')]
+for rank_name, rank_key in ranks:
+    plot_WD2(distances_200, rank_name, rank_key)
+
+mdn_data = [distances_200['mdn'][key] for key in ['q1', 'q2', 'q3']]
+plt.figure()
+plt.boxplot(mdn_data)
+plt.xticks([1, 2, 3], ['rank10', 'rank21', 'rank33'])
+plt.title('Distribution of W2 distances at different ranks')
+plt.ylabel('Wasserstein Distance')
+plt.show()
+
+
+# Figure 4c, 13c and 14c 
+
+data = np.squeeze(X_train)
+data_Sigma = Sigma[0:len(X_train)]
+pd.DataFrame(data).to_csv("data.csv", index=False)
+
+%%R
+data_r <- read.csv("data.csv")
+data_r <- as.matrix(data_r)
+
+spec <- bekk_spec()
+model_bekk <- bekk_fit(spec, data_r, QML_t_ratios = TRUE, max_iter = 50)
+C_matrix <- model_bekk$C0
+A_matrix <- model_bekk$A
+G_matrix <- model_bekk$G
+
+T <- nrow(model_bekk$H_t)
+list_Sigma_param <- array(NA, dim = c(6, 6, T))
+for (t in 1:T) {
+  list_Sigma_param[, , t] <- matrix(model_bekk$H_t[t, ], nrow = 6, byrow = TRUE)
+}
+# ===== finish R environment =====
+
+# transform to Python object
+from rpy2.robjects import r
+
+r('''
+params <- model_bekk$est.params
+C_param <- model_bekk$C0
+A_param <- model_bekk$A
+G_param <- model_bekk$G
+''')
+
+C_param = np.squeeze(np.array(r['C_param']))
+A_param = np.squeeze(np.array(r['A_param']))
+G_param = np.squeeze(np.array(r['G_param']))
+
+r('''
+list_Sigma_param <- list_Sigma_param
+''')
+
+list_Sigma_param = np.array(r['list_Sigma_param'])
+
+# unconditional covariance
+Sigma_uncond = list_Sigma_param[:, :, -1].copy()
+
+for iter in range(1000):
+    Sigma_new = C_param.T @ C_param + A_param @ Sigma_uncond @ A_param.T + G_param @ Sigma_uncond @ G_param.T
+    if np.max(np.abs(Sigma_new - Sigma_uncond)) < 1e-8:
+        break
+
+    Sigma_uncond = Sigma_new.copy()
+
+# KDE
+standardized_residuals = calculate_residuals_bekk(data, list_Sigma_param)
+kde_residuals = KDEMultivariate(standardized_residuals,
+                               bw='normal_reference',
+                               var_type='cccccc')
+
+# prepare data
+X_val_200 = np.squeeze(X_val[0:200, :, :])
+distances_200 = compute_wasserstein_bekk(X_val_200, m=1000)
+
+ranks = [('rank 10', 'q1'), ('rank 21', 'q2'), ('rank 33', 'q3')]
+for rank_name, rank_key in ranks:
+    plot_WD2(distances_200, rank_name, rank_key)
+
+mdn_data = [distances_200['mdn'][key] for key in ['q1', 'q2', 'q3']]
+plt.figure()
+plt.boxplot(mdn_data)
+plt.xticks([1, 2, 3], ['rank10', 'rank21', 'rank33'])
+plt.title('Distribution of W2 distances at different ranks')
+plt.ylabel('Wasserstein Distance')
+plt.show()
+
+
+# Figure 4d, 13d and 14d 
+
+len_train = X_train.shape[0] - 1 + X_train.shape[1]
+print(len_train)
+data_train = X_train.reshape(X_train.shape[0], X_train.shape[2])
+df = pd.DataFrame(data_train)
+
+model_param = VAR(df)
+results_param = model_param.fit(1)
+
+A_param = np.squeeze(results_param.coefs)
+Sigma_param = results_param.sigma_u       # Parametric results
+
+standardized_residuals = calculate_residuals(data_train, A_param, Sigma_param)
+
+kde_residuals = KDEMultivariate(standardized_residuals,
+                               bw='normal_reference',
+                               var_type='cccccc')     
+
+# prepare data
+X_val_200 = np.squeeze(X_val[0:200, :, :])
+distances_200 = compute_wasserstein_nonl(X_val_200, A_param, Sigma_param, m=1000)
+
+ranks = [('rank 10', 'q1'), ('rank 21', 'q2'), ('rank 33', 'q3')]
+for rank_name, rank_key in ranks:
+    plot_WD2(distances_200, rank_name, rank_key)
+
+mdn_data = [distances_200['mdn'][key] for key in ['q1', 'q2', 'q3']]
+plt.figure()
+plt.boxplot(mdn_data)
+plt.xticks([1, 2, 3], ['rank10', 'rank21', 'rank33'])
+plt.title('Distribution of W2 distances at different ranks')
+plt.ylabel('Wasserstein Distance')
+plt.show()
+
+
+# Figure 10c, 11c, 12c, 5a 
+
+data = np.squeeze(X_train)
+data_Sigma = Sigma[0:len(X_train)]
+pd.DataFrame(data).to_csv("data.csv", index=False)
+
+%%R
+data_r <- read.csv("data.csv")
+data_r <- as.matrix(data_r)
+
+spec <- bekk_spec()
+model_bekk <- bekk_fit(spec, data_r, QML_t_ratios = TRUE, max_iter = 50)
+C_matrix <- model_bekk$C0
+A_matrix <- model_bekk$A
+G_matrix <- model_bekk$G
+
+T <- nrow(model_bekk$H_t)
+list_Sigma_param <- array(NA, dim = c(3, 3, T))
+for (t in 1:T) {
+  list_Sigma_param[, , t] <- matrix(model_bekk$H_t[t, ], nrow = 3, byrow = TRUE)
+}
+# ===== finish R environment =====
+
+# transform to Python object
+from rpy2.robjects import r
+
+r('''
+params <- model_bekk$est.params
+C_param <- model_bekk$C0
+A_param <- model_bekk$A
+G_param <- model_bekk$G
+''')
+
+C_param = np.squeeze(np.array(r['C_param']))
+A_param = np.squeeze(np.array(r['A_param']))
+G_param = np.squeeze(np.array(r['G_param']))
+
+r('''
+list_Sigma_param <- list_Sigma_param
+''')
+
+list_Sigma_param = np.array(r['list_Sigma_param'])
+
+# unconditional covariance
+Sigma_uncond = list_Sigma_param[:, :, -1].copy()
+
+for iter in range(1000):
+    Sigma_new = C_param.T @ C_param + A_param @ Sigma_uncond @ A_param.T + G_param @ Sigma_uncond @ G_param.T
+    if np.max(np.abs(Sigma_new - Sigma_uncond)) < 1e-8:
+        break
+
+    Sigma_uncond = Sigma_new.copy()
+
+# KDE
+standardized_residuals = calculate_residuals_bekk(data, list_Sigma_param)
+kde_residuals = KDEMultivariate(standardized_residuals,
+                               bw='normal_reference',
+                               var_type='ccc')
+
+# prepare data
+X_val_200 = np.squeeze(X_val[0:200, :, :])
+distances_200 = compute_wasserstein_bekk(X_val_200, m=1000)
+
+ranks = [('rank 10', 'q1'), ('rank 21', 'q2'), ('rank 33', 'q3')]
+for rank_name, rank_key in ranks:
+    plot_WD2(distances_200, rank_name, rank_key)
+
+# Figure 5a
+mdn_data = [distances_200['mdn'][key] for key in ['q1', 'q2', 'q3']]
+plt.figure()
+plt.boxplot(mdn_data)
+plt.xticks([1, 2, 3], ['rank10', 'rank21', 'rank33'])
+plt.title('Empirical distribution of W2 distances at different levels')
+plt.ylabel('Wasserstein Distance')
+plt.show()
+
+
+# Figure 10d, 11d, 12d, 5b 
+
+len_train = X_train.shape[0] - 1 + X_train.shape[1]
+print(len_train)
+data_train = X_train.reshape(X_train.shape[0], X_train.shape[2])
+df = pd.DataFrame(data_train)
+
+model_param = VAR(df)
+results_param = model_param.fit(1)
+
+A_param = np.squeeze(results_param.coefs)
+Sigma_param = results_param.sigma_u       # Parametric results
+
+standardized_residuals = calculate_residuals(data_train, A_param, Sigma_param)
+
+kde_residuals = KDEMultivariate(standardized_residuals,
+                               bw='normal_reference',
+                               var_type='ccc')     
+
+# prepare data
+X_val_200 = np.squeeze(X_val[0:200, :, :])
+distances_200 = compute_wasserstein_nonl(X_val_200, A_param, Sigma_param, m=1000)
+
+ranks = [('rank 10', 'q1'), ('rank 21', 'q2'), ('rank 33', 'q3')]
+for rank_name, rank_key in ranks:
+    plot_WD2(distances_200, rank_name, rank_key)
+
+# Figure 5b
+mdn_data = [distances_200['mdn'][key] for key in ['q1', 'q2', 'q3']]
+plt.figure()
+plt.boxplot(mdn_data)
+plt.xticks([1, 2, 3], ['rank10', 'rank21', 'rank33'])
+plt.title('Distribution of W2 distances at different ranks')
+plt.ylabel('Wasserstein Distance')
+plt.show()
+
+
+# Figure 10a, 11a, 12a
+
+# Generate data
+Xt = load_data(n = 10000)
+X_train, y_train, X_val, y_val = data_process(Xt, p = 1, r = 0.2)
+print(Xt.shape)
+print(X_train.shape, y_train.shape, X_val.shape, y_val.shape)
+
+test_X = X_val[-5]
+test_y = y_val[-5]
+
+set_seed(42)
+# Define model
+torch.set_default_dtype(torch.float64)
+model = RNN(gause_mixture_n=10)
+
+# Train model
+model, tl, vl = train(model, X_train, y_train, X_val, y_val, lr=3e-4, batch_size=128, epochs=10)
+loss_curve_shower(tl, vl)
+
+# parametric estimation
+data_train = X_train.reshape(X_train.shape[0], X_train.shape[2])
+df = pd.DataFrame(data_train)
+model_param = VAR(df)
+results_param = model_param.fit(1)
+
+A_param = np.squeeze(results_param.coefs)
+Sigma_param = results_param.sigma_u
+
+# KDE
+standardized_residuals = calculate_residuals(data_train, A_param, Sigma_param)
+kde_residuals = KDEMultivariate(standardized_residuals,
+                               bw='normal_reference',
+                               var_type='ccc')
+
+# prepare data
+A = np.array([[0.2, -0.6, 0.1],
+              [0.3, 1.1, -0.2],
+              [0.1, 0.2, 0.8]])
+cov = np.array([[1, 0.3, 0.2],
+                [0.3, 1, 0.1],
+                [0.2, 0.1, 1]])
+X_val_200 = np.squeeze(X_val[0:200, :, :])
+## Sigma = cov
+distances_200 = compute_wasserstein(X_val_200, A, Sigma, A_param, Sigma_param, m=1000)
+
+ranks = [('rank 10', 'q1'), ('rank 21', 'q2'), ('rank 33', 'q3')]
+for rank_name, rank_key in ranks:
+    plot_WD2(distances_200, rank_name, rank_key)
+
+
+# Figure 10b, 11b, 12b
+
+len_train = X_train.shape[0] - 1 + X_train.shape[1]
+data_train = Xt[:len_train, :]
+df = pd.DataFrame({
+    'dim1': data_train[:, 0],
+    'dim2': data_train[:, 1],
+    'dim3': data_train[:, 2]
+})
+
+model_varma = VARMAX(df, order=(1, 1))
+results_varma = model_varma.fit(disp=True)
+
+k_vars = 3
+mu_param = np.zeros(k_vars)
+ar_coefs = np.zeros((k_vars, k_vars))
+ma_coefs = np.zeros((k_vars, k_vars))
+L = np.zeros((k_vars, k_vars))
+
+param_dict = results_varma.params.to_dict()
+# intercept
+for i in range(1, k_vars + 1):
+    key = f"intercept.dim{i}"
+    if key in param_dict:
+        mu_param[i-1] = param_dict[key]
+# AR coefficient matrix (3x3)
+for i in range(1, k_vars + 1):
+    for j in range(1, k_vars + 1):
+        key = f"L1.dim{i}.dim{j}"
+        if key in param_dict:
+            ar_coefs[j-1, i-1] = param_dict[key]
+# MA coefficient matrix (3x3)
+for i in range(1, k_vars + 1):
+    for j in range(1, k_vars + 1):
+        key = f"L1.e(dim{i}).dim{j}"
+        if key in param_dict:
+            ma_coefs[j-1, i-1] = param_dict[key]
+# Cholesky matrix
+for i in range(1, k_vars + 1):
+    L[i-1, i-1] = param_dict.get(f"sqrt.var.dim{i}", 0)
+    for j in range(1, i):
+        L[i-1, j-1] = param_dict.get(f"sqrt.cov.dim{j}.dim{i}", 0)
+Sigma_param = L @ L.T
+
+# KDE
+standardized_residuals = calculate_residuals_varma(X_train, Psi_list, Sigma_param)
+kde_residuals = KDEMultivariate(standardized_residuals,
+                               bw='normal_reference',
+                               var_type='ccc')
+
+# prepare data
+X_val_200 = X_val[0:200, :, :]
+distances_200 = compute_wasserstein_varma(X_val_200, Phi, Theta, Sigma, mu_param, ar_coefs, ma_coefs, Sigma_param, m=1000)
+
+ranks = [('rank 10', 'q1'), ('rank 21', 'q2'), ('rank 33', 'q3')]
+for rank_name, rank_key in ranks:
+    plot_WD2(distances_200, rank_name, rank_key)
+
+
+
+
+
 
 
 
